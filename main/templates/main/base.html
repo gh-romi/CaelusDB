@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CaelusDB - {% block title %}Letecký systém{% endblock %}</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f7f6;
+            /* Odsazení DOLE pro spodní panel */
+            padding-bottom: 70px;
+            /* Odsazení NAHOŘE pro fixní hlavičku (aby obsah nebyl schovaný pod ní) */
+            padding-top: 70px;
+        }
+
+        /* --- HORNÍ LIŠTA (FIXNÍ) --- */
+        header {
+            background-color: #003366;
+            color: white;
+            padding: 0.8rem 1.5rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+
+            /* ZMĚNA: Fixní pozice */
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            z-index: 1001; /* Musí být nad obsahem */
+            box-sizing: border-box; /* Aby padding nerozbil 100% šířku */
+        }
+
+        header a {
+            color: white;
+            text-decoration: none;
+            font-weight: bold;
+        }
+        header .logo { font-size: 1.5rem; }
+
+        /* Styl pro auth tlačítka nahoře */
+        .top-auth {
+            font-size: 1rem;
+            font-weight: bold;
+        }
+        .top-auth a, .top-auth button {
+            color: rgba(255,255,255,0.9);
+            margin-left: 15px;
+            background: none; border: none; cursor: pointer;
+            font-family: inherit; font-size: inherit; font-weight: inherit;
+        }
+        .top-auth a:hover, .top-auth button:hover { color: white; text-decoration: underline; }
+
+
+        /* --- SPODNÍ NAVIGAČNÍ PANEL --- */
+        .bottom-nav {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 50px; /* ZMĚNA: Menší výška (kompaktnější) */
+            background-color: white;
+            border-top: 1px solid #ddd;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            box-shadow: 0 -2px 10px rgba(0,0,0,0.05);
+        }
+
+        .nav-container {
+            display: flex;
+            width: 100%;
+            max-width: 700px; /* Trochu širší pro text vedle ikony */
+            justify-content: space-around;
+            height: 100%;
+        }
+
+        .nav-item {
+            flex: 1;
+            display: flex;
+            /* ZMĚNA: Řádek místo sloupce (ikona vlevo, text vpravo) */
+            flex-direction: row;
+            align-items: center;
+            justify-content: center;
+            text-decoration: none;
+            color: #666;
+            font-size: 0.9rem; /* Trochu větší písmo */
+            font-weight: bold;
+            transition: color 0.2s, background-color 0.2s;
+            gap: 8px; /* Mezera mezi ikonou a textem */
+        }
+
+        .nav-item:hover {
+            background-color: #f8f9fa;
+            color: #003366;
+        }
+
+        .nav-item.active {
+            color: #0056b3;
+        }
+
+        .nav-icon {
+            font-size: 1.2rem; /* ZMĚNA: Menší ikona, aby ladila s textem */
+            margin-bottom: 0; /* Zrušen spodní margin */
+        }
+
+        .nav-text { display: block; }
+
+        /* --- RESPONSIVITA (Mobil) --- */
+        @media (max-width: 768px) {
+            .nav-container { max-width: 100%; }
+
+            /* Na mobilu vrátíme velké ikony bez textu */
+            .nav-icon { font-size: 1.8rem; }
+            .nav-text { display: none; }
+
+            /* Hlavička na mobilu */
+            header { padding: 0.8rem 1rem; }
+        }
+
+        .container { max-width: 1000px; margin: 2rem auto; padding: 0 1rem; }
+
+        /* Globální styl pro tlačítka */
+        .btn {
+            padding: 10px 20px; border: none; cursor: pointer;
+            border-radius: 10px; text-decoration: none; display: inline-block;
+            font-weight: bold;
+        }
+        .btn-primary { background-color: #0056b3; color: white; }
+        .btn-success { background-color: #28a745; color: white; }
+
+        /* --- STYL PRO VLASTNÍ POPUP --- */
+        .custom-alert {
+            visibility: hidden; /* Skryté */
+            min-width: 250px;
+            background-color: #dc3545; /* Červená */
+            color: #fff; /* Bílé písmo */
+            text-align: center;
+            border-radius: 50px; /* Kulaté rohy */
+            padding: 16px;
+            position: fixed;
+            z-index: 2000; /* Aby byl úplně nahoře */
+            left: 50%;
+            bottom: 80px; /* Nad spodním menu */
+            transform: translateX(-50%);
+            font-size: 1rem;
+            font-weight: bold;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+            opacity: 0;
+            transition: opacity 0.5s, bottom 0.5s;
+        }
+
+        /* Třída pro zobrazení */
+        .custom-alert.show {
+            visibility: visible;
+            opacity: 1;
+            bottom: 90px; /* Malá animace posunu nahoru */
+        }
+
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="logo">
+            <a href="{% url 'home' %}">✈️ CaelusDB</a>
+        </div>
+
+        <div class="top-auth">
+            {% if user.is_authenticated %}
+                {% if user.is_staff %}
+                    <a href="/admin/" style="color: #ffd700;">[Admin]</a>
+                {% endif %}
+
+                <form action="{% url 'logout' %}" method="post" style="display: inline;">
+                    {% csrf_token %}
+                    <button type="submit">Odhlásit</button>
+                </form>
+            {% else %}
+                <a href="{% url 'login' %}">Přihlásit</a>
+            {% endif %}
+        </div>
+    </header>
+
+    <main class="container">
+        {% block content %}
+        {% endblock %}
+    </main>
+
+    <div id="login-popup" class="custom-alert">
+        Musíte se nejdříve přihlásit!
+    </div>
+
+    <nav class="bottom-nav">
+        <div class="nav-container">
+
+            <a href="{% url 'home' %}" class="nav-item {% if request.resolver_match.url_name == 'home' %}active{% endif %}">
+                <span class="nav-icon">🔍</span>
+                <span class="nav-text">Hledat</span>
+            </a>
+
+            {% if user.is_authenticated %}
+                <a href="{% url 'moje_rezervace' %}" class="nav-item {% if request.resolver_match.url_name == 'moje_rezervace' %}active{% endif %}">
+                    <span class="nav-icon">🎫</span>
+                    <span class="nav-text">Rezervace</span>
+                </a>
+            {% else %}
+                <a href="#" class="nav-item disabled-link" onclick="showLoginAlert(event)">
+                    <span class="nav-icon">🎫</span>
+                    <span class="nav-text">Rezervace</span>
+                </a>
+            {% endif %}
+
+            {% if user.is_authenticated %}
+                {% for role in user.role.all %}
+                    {% if role.nazev_role == "Pilot" or role.nazev_role == "Palubní průvodčí" %}
+                        <a href="#" class="nav-item">
+                            <span class="nav-icon">✈️</span>
+                            <span class="nav-text">Moje lety</span>
+                        </a>
+                    {% endif %}
+                {% endfor %}
+            {% endif %}
+
+            {% if user.is_authenticated %}
+                <a href="{% url 'muj_profil' %}" class="nav-item {% if request.resolver_match.url_name == 'muj_profil' %}active{% endif %}">
+                    <span class="nav-icon">👤</span>
+                    <span class="nav-text">Profil</span>
+                </a>
+            {% else %}
+                <a href="#" class="nav-item disabled-link" onclick="showLoginAlert(event)">
+                    <span class="nav-icon">👤</span>
+                    <span class="nav-text">Profil</span>
+                </a>
+            {% endif %}
+
+        </div>
+    </nav>
+
+    <script>
+        function showLoginAlert(event) {
+            event.preventDefault(); // Zastaví kliknutí
+
+            const popup = document.getElementById("login-popup");
+
+            // Přidáme třídu 'show', která element zviditelní
+            popup.className = "custom-alert show";
+
+            // Po 3 sekundách (3000 ms) třídu odebereme
+            setTimeout(function(){
+                popup.className = popup.className.replace("show", "");
+            }, 3000);
+        }
+    </script>
+
+    <style>
+        .disabled-link {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        /* ... zbytek stylů ... */
+    </style>
+
+</body>
+</html>

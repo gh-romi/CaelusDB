@@ -1,0 +1,86 @@
+{% extends 'main/base.html' %}
+
+{% block title %}Platba{% endblock %}
+
+{% block content %}
+
+<div style="max-width: 600px; margin: 40px auto; background: white; padding: 30px; border-radius: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+
+    <h2 style="text-align: center; margin-top: 0; color: #003366;">Shrnutí rezervace</h2>
+    <div style="text-align: center; color: #666; margin-bottom: 20px;">ID: #{{ rezervace.id }}</div>
+
+    <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;">
+
+    {% for letenka in rezervace.letenky_set.all %}
+    <div style="margin-bottom: 15px; padding-bottom: 15px; border-bottom: 1px dashed #eee;">
+
+        <div class="route-header">
+            <div class="route-city">
+                {{ letenka.id_letu.id_letiste_odletu.mesto }}
+                ({{ letenka.id_letu.id_letiste_odletu.kod_iata }}),
+                {{ letenka.id_letu.id_letiste_odletu.zeme }}
+            </div>
+
+            <div class="route-arrow">➝</div>
+
+            <div class="route-city">
+                {{ letenka.id_letu.id_letiste_priletu.mesto }}
+                ({{ letenka.id_letu.id_letiste_priletu.kod_iata }}),
+                {{ letenka.id_letu.id_letiste_priletu.zeme }}
+            </div>
+        </div>
+        <div style="display: flex; justify-content: space-between; color: #555; margin-top: 10px;">
+          <span>Sedadlo: <strong>{{ letenka.cislo_sedadla }}</strong> ({{ letenka.id_tridy.nazev_tridy }})</span>
+            <span style="color: #28a745; font-weight: bold; font-size: 1rem;">{{ letenka.cena_letenky }} $</span>
+        </div>
+    </div>
+    {% endfor %}
+
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 20px; font-size: 1.2rem;">
+        <strong>Celkem k úhradě:</strong>
+        <span style="color: #28a745; font-weight: bold; font-size: 1.5rem;">{{ rezervace.celkova_cena }} $</span>
+    </div>
+
+    <form method="POST" action=".">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-success" style="width: 100%; margin-top: 30px; height: 50px; font-size: 1.1rem; border-radius: 10px;">
+            Zaplatit
+        </button>
+    </form>
+
+</div>
+
+<style>
+    .route-header {
+        margin-top: 0;
+        padding-bottom: 5px;
+        color: #003366;
+        font-size: 1.1rem; /* Trochu menší než v detailu, aby se vešlo */
+        font-weight: bold;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+    }
+
+    .route-arrow {
+        color: #888;
+        font-weight: normal;
+    }
+
+    /* Mobilní úpravy */
+    @media (max-width: 768px) {
+        .route-header {
+            flex-direction: column; /* Města pod sebe */
+            align-items: flex-start;
+            gap: 5px;
+        }
+
+        .route-arrow {
+            transform: rotate(90deg); /* Otočíme šipku dolů */
+            margin-left: 10px;
+        }
+    }
+</style>
+
+{% endblock %}

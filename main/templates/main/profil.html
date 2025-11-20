@@ -1,0 +1,101 @@
+{% extends 'main/base.html' %}
+
+{% block title %}Můj profil{% endblock %}
+
+{% block content %}
+
+<div style="max-width: 600px; margin: 40px auto; background: white; padding: 30px; border-radius: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+    <h2 style="margin-top: 0; border-bottom: 1px solid #eee; padding-bottom: 15px; margin-bottom: 20px;">
+        Můj profil 👤
+    </h2>
+
+    <form method="post" action=".">
+        {% csrf_token %}
+        
+        {% for field in form %}
+
+            {% if field.name == 'airline_display' and not field.value %}
+                {% else %}
+                <div style="margin-bottom: 15px;">
+                    <label style="display: block; margin-bottom: 5px; font-weight: bold; color: #555;">
+                        {{ field.label }}:
+                    </label>
+
+                    {{ field }}
+
+                    {% if field.help_text %}
+                        <div style="font-size: 0.8rem; color: #888; margin-top: 3px;">{{ field.help_text }}</div>
+                    {% endif %}
+
+                    {% if field.errors %}
+                        <div style="color: red; font-size: 0.9rem;">{{ field.errors }}</div>
+                    {% endif %}
+                </div>
+            {% endif %}
+
+        {% endfor %}
+
+        <div class="btn-container">
+            <button type="submit" style="font-weight: bold;" class="btn btn-primary profile-btn">
+                Uložit změny
+            </button>
+
+            <a href="{% url 'zmena_hesla' %}" class="btn profile-btn" style="background-color: #6c757d; color: white; text-decoration: none; display: flex; align-items: center; justify-content: center; font-weight: bold;">
+                Změnit heslo
+            </a>
+        </div>
+    </form>
+</div>
+
+<style>
+    /* CSS pro inputy */
+    form input[type="text"],
+    form input[type="email"],
+    form input[type="number"] {
+        width: 100%;
+        padding: 12px;
+        border: 1px solid #ccc;
+        border-radius: 10px;
+        box-sizing: border-box;
+        font-size: 1rem;
+    }
+    form input:disabled {
+        background-color: #f9f9f9;
+        color: #666;
+        cursor: not-allowed;
+    }
+
+    /* --- NOVÉ STYLY PRO TLAČÍTKA --- */
+
+    .btn-container {
+        display: flex;
+        gap: 15px;
+        flex-wrap: wrap;
+        margin-top: 30px;
+    }
+
+    .profile-btn {
+        height: 50px; /* Pevná výška pro obě tlačítka */
+        border-radius: 10px;
+        font-size: 1rem;
+        border: none;
+        cursor: pointer;
+        flex: 1; /* Obě tlačítka se roztáhnou rovnoměrně */
+        box-sizing: border-box; /* Aby padding/border nezvětšoval výšku */
+    }
+
+    /* Mobilní úprava */
+    @media (max-width: 600px) {
+        .btn-container {
+            flex-direction: column; /* Pod sebe */
+            gap: 10px;
+        }
+
+        .profile-btn {
+            width: 100%; /* Roztáhnout na celou šířku */
+            flex: auto;
+        }
+    }
+</style>
+
+{% endblock %}

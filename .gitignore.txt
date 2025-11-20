@@ -1,0 +1,17 @@
+# Django standard
+*.log
+*.pot
+*.pyc
+__pycache__/
+db.sqlite3
+media/
+
+# Virtuální prostředí (TOHLE JE DŮLEŽITÉ)
+venv/
+env/
+.env
+.venv/
+
+# IDE (PyCharm, VS Code)
+.idea/
+.vscode/

@@ -1,0 +1,230 @@
+{% extends 'main/base.html' %}
+
+{% block title %}Moje rezervace{% endblock %}
+
+{% block content %}
+
+<div style="max-width: 800px; margin: 0 auto;">
+
+    <h1 style="margin-bottom: 20px;">Moje rezervace</h1>
+
+    <div style="background: white; padding: 20px; border-radius: 20px; margin-bottom: 30px; box-shadow: 0 2px 5px rgba(0,0,0,0.05);">
+        <form method="GET" action="." style="display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-end;">
+            <div style="flex: 1 1 100%; margin-bottom: 10px;">
+                <label style="cursor: pointer; font-weight: bold; display: flex; align-items: center; gap: 10px;">
+                    <input type="checkbox" name="zobrazit_vse" {% if zobrazit_vse %}checked{% endif %}
+                           onchange="toggleDateInputs(this)">
+                    Zobrazit i proběhlé lety (historii)
+                </label>
+            </div>
+            <div id="datum-od-wrapper" style="flex: 1 1 150px; {% if not zobrazit_vse %}opacity: 0.5; pointer-events: none;{% endif %}">
+                <label style="display: block; margin-bottom: 5px; font-size: 0.9rem;">Datum od:</label>
+                <input type="date" name="datum_od" value="{{ request.GET.datum_od }}" class="form-control">
+            </div>
+
+            <div style="flex: 1 1 150px;">
+                <label style="display: block; margin-bottom: 5px; font-size: 0.9rem;">Datum do:</label>
+                <input type="date" name="datum_do" value="{{ request.GET.datum_do }}" class="form-control">
+            </div>
+            <div style="flex: 1 1 100px;">
+                <button type="submit" class="btn btn-primary" style="width: 100%; height: 38px; border-radius: 10px;">
+                    Filtrovat
+                </button>
+            </div>
+        </form>
+    </div>
+
+    {% if rezervace_list %}
+        {% for rezervace in rezervace_list %}
+            <div class="reservation-card">
+
+                <div style="flex: 1;">
+                    <div style="font-size: 1.2rem; font-weight: bold; color: #003366; margin-bottom: 5px;">
+                        Rezervace #{{ rezervace.id }}
+                    </div>
+                    <div style="color: #666; font-size: 0.9rem; margin-bottom: 10px;">
+                        Vytvořeno: {{ rezervace.datum_rezervace|date:"d.m.Y H:i" }}
+                    </div>
+
+                    <div style="color: #003366; font-weight: bold; margin-bottom: 10px; font-size: 1rem;">
+                        Odlet: {{ rezervace.letenky_set.first.id_letu.cas_odletu|date:"d.m.Y H:i" }}
+                    </div>
+                    <div>
+                        Stav:
+                        {% if rezervace.status_platby == 'ZAPLACENO' %}
+                            <span style="color: #28a745; font-weight: bold;">Zaplaceno ✅</span>
+                        {% else %}
+                            <span style="color: #dc3545; font-weight: bold;">Nezaplaceno ❌</span>
+                            <div class="timer-container"
+                                 data-created="{{ rezervace.datum_rezervace|date:'U' }}">
+                                Zbývá času: <span class="countdown" style="font-weight: bold; color: #d9534f;">--:--</span>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="reservation-right">
+                    <div style="font-size: 1.3rem; font-weight: bold; color: #28a745; margin-bottom: 10px;">
+                        {{ rezervace.celkova_cena }} $
+                    </div>
+
+                    <a href="{% url 'detail_moje_rezervace' rezervace.id %}" class="btn btn-primary" style="font-size: 0.9rem; border-radius: 10px; padding: 8px 15px;">
+                        Podrobnosti ➔
+                    </a>
+                </div>
+            </div>
+        {% endfor %}
+    {% else %}
+        <p style="text-align: center; color: #666; margin-top: 50px;">
+            Žádné rezervace nenalezeny.
+        </p>
+    {% endif %}
+
+</div>
+
+<style>
+    .form-control { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 10px; box-sizing: border-box; }
+
+    .reservation-card {
+        background: white;
+        padding: 20px;
+        border-radius: 20px;
+        margin-bottom: 15px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        border: 1px solid #eee;
+        display: flex;
+        justify-content: space-between;
+    }
+
+    .reservation-right {
+        text-align: right;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        align-items: flex-end;
+    }
+
+    .timer-container {
+        margin-top: 5px;
+        font-size: 0.9rem;
+        background: #fff5f5;
+        padding: 5px;
+        border-radius: 5px;
+        display: inline-block;
+    }
+
+    /* MOBILNÍ ZOBRAZENÍ */
+    @media (max-width: 600px) {
+        .reservation-card {
+            flex-direction: column; /* Pod sebe */
+            gap: 15px;
+        }
+
+        /* Zarovnání pravé části (ceny a tlačítka) doleva */
+        .reservation-right {
+            text-align: left;
+            align-items: flex-start;
+            border-top: 1px dashed #eee; /* Oddělovač */
+            padding-top: 10px;
+            flex-direction: row; /* Cena a tlačítko vedle sebe */
+            align-items: center;
+            width: 100%;
+        }
+
+        /* Aby cena zabírala místo a tlačítko bylo vpravo */
+        .reservation-right > div {
+            margin-bottom: 0;
+            margin-right: auto; /* Odsune tlačítko doprava */
+        }
+    }
+</style>
+
+<script>
+    // 1. Filtr inputů
+    function toggleDateInputs(checkbox) {
+        // Změna: Hledáme ID 'datum-od-wrapper' místo 'date-inputs'
+        const wrapperOd = document.getElementById('datum-od-wrapper');
+
+        if (checkbox.checked) {
+            wrapperOd.style.opacity = '1';
+            wrapperOd.style.pointerEvents = 'auto';
+        } else {
+            wrapperOd.style.opacity = '0.5';
+            wrapperOd.style.pointerEvents = 'none';
+
+            // Volitelně: Vymazat hodnotu 'Datum od', když se vypne
+            // wrapperOd.querySelector('input').value = '';
+        }
+    }
+
+    // Zavolat hned po načtení, aby se nastavil správný stav
+    document.addEventListener("DOMContentLoaded", function() {
+        const checkbox = document.querySelector('input[name="zobrazit_vse"]');
+        toggleDateInputs(checkbox);
+    });
+
+    // 2. Odpočet času
+    function updateTimers() {
+        const now = Math.floor(Date.now() / 1000); // Aktuální čas v sekundách
+        const timers = document.querySelectorAll('.timer-container');
+
+        timers.forEach(timer => {
+            const createdTimestamp = parseInt(timer.getAttribute('data-created'));
+            const expireTimestamp = createdTimestamp + (30 * 60); // + 30 minut
+            const diff = expireTimestamp - now;
+
+            if (diff <= 0) {
+                // Čas vypršel -> Reload stránky (backend to smaže)
+                location.reload();
+            } else {
+                // Formátování MM:SS
+                const minutes = Math.floor(diff / 60);
+                const seconds = diff % 60;
+                const display = `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
+                timer.querySelector('.countdown').innerText = display;
+            }
+        });
+    }
+
+    // Spustit hned a pak každou sekundu
+    updateTimers();
+    setInterval(updateTimers, 1000);
+</script>
+
+
+<div id="expiry-popup" class="custom-alert" style="cursor: pointer; background-color: #dc3545;">
+    Čas na zaplacení rezervace vypršel.<br>
+    <span style="font-weight: normal; font-size: 0.9rem;">(Kliknutím zavřete)</span>
+</div>
+
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        // 1. Kontrola URL parametrů
+        const urlParams = new URLSearchParams(window.location.search);
+
+        if (urlParams.has('expired')) {
+            const popup = document.getElementById("expiry-popup");
+
+            // Zobrazíme popup
+            popup.classList.add("show");
+
+            // Nastavíme zavření po kliknutí (jak jsi chtěl)
+            popup.onclick = function() {
+                popup.classList.remove("show");
+
+                // Volitelně: Vyčistíme URL od parametru, aby po obnovení stránky popup nevyskočil znovu
+                const newUrl = window.location.pathname;
+                window.history.replaceState({}, document.title, newUrl);
+            };
+        }
+
+        // (Tvůj existující kód pro checkbox a filtry)
+        const checkbox = document.querySelector('input[name="zobrazit_vse"]');
+        if(checkbox) toggleDateInputs(checkbox); // Kontrola, jestli element existuje
+    });
+
+    // ... (zbytek tvého scriptu updateTimers atd. zůstává) ...
+</script>
+
+
+{% endblock %}

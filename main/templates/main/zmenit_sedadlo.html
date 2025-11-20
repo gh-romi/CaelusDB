@@ -1,0 +1,135 @@
+{% extends 'main/base.html' %}
+{% block title %}Změna sedadla{% endblock %}
+{% block content %}
+
+<div style="max-width: 800px; margin: 0 auto;">
+
+    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
+        <h1 style="margin: 0;">Změna sedadla</h1>
+        <a href="{% url 'detail_moje_rezervace' letenka.id_rezervace.id %}" class="btn" style="background-color: #6c757d; color: white; text-decoration: none;">
+            🠔 Zpět
+        </a>
+    </div>
+
+    <form method="POST" action="#">
+        {% csrf_token %}
+
+        <div style="background: white; padding: 25px; border-radius: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 30px;">
+
+            <div class="route-header">
+                <div class="route-city">
+                    {{ let.id_letiste_odletu.mesto }}
+                    ({{ let.id_letiste_odletu.kod_iata }}),
+                    {{ let.id_letiste_odletu.zeme }}
+                </div>
+                <div class="route-arrow">➝</div>
+                <div class="route-city">
+                    {{ let.id_letiste_priletu.mesto }}
+                    ({{ let.id_letiste_priletu.kod_iata }}),
+                    {{ let.id_letiste_priletu.zeme }}
+                </div>
+            </div>
+
+            <div style="margin-bottom: 20px; color: #555; border-bottom: 1px solid #eee; padding-bottom: 15px;">
+                 <div>Let: <strong>{{ let.cislo_letu }}</strong> ({{ let.id_aerolinky.nazev }})</div>
+                 <div>Třída: <strong>{{ letenka.id_tridy.nazev_tridy }}</strong></div>
+                 <div>Aktuální sedadlo: <strong style="color: #0056b3;">{{ letenka.cislo_sedadla }}</strong></div>
+            </div>
+
+            <h3 style="margin-top: 0;">Vyberte nové místo:</h3>
+
+            <select name="sedadlo_{{ let.id }}"
+                    id="sedadlo-select"
+                    class="form-control"
+                    style="width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 10px;"
+                    required>
+                </select>
+
+            <button type="submit" class="btn btn-success" style="width: 100%; margin-top: 20px; border-radius: 10px; padding: 12px; font-size: 1.1rem;">
+                Uložit nové sedadlo
+            </button>
+
+         </div>
+    </form>
+</div>
+
+<style>
+    /* --- Styly pro trasu (stejné jako v rezervaci) --- */
+    .route-header {
+        margin-top: 0;
+        padding-bottom: 10px;
+        color: #003366;
+        font-size: 1.3rem;
+        font-weight: bold;
+        display: flex;
+        align-items: center;
+        gap: 15px;
+        flex-wrap: wrap;
+    }
+
+    .route-arrow {
+        color: #888;
+        font-weight: normal;
+    }
+
+    /* --- Mobilní úpravy --- */
+    @media (max-width: 768px) {
+        .route-header {
+            flex-direction: column; /* Města pod sebe */
+            align-items: flex-start;
+            gap: 5px;
+        }
+
+        .route-arrow {
+            transform: rotate(90deg); /* Otočíme šipku dolů */
+            margin-left: 10px;
+        }
+    }
+
+    option:disabled { color: red; background-color: #ffe6e6; }
+    option { color: green; }
+</style>
+
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        // Data z backendu
+        const occupiedSeats = JSON.parse('{{ obsazena_sedadla_json|safe }}');
+        const seatCount = parseInt('{{ kapacita }}');
+        const classIndex = parseInt('{{ class_index }}');
+        const currentSeat = "{{ letenka.cislo_sedadla }}";
+
+        const prefix = String.fromCharCode(64 + classIndex);
+
+        const selectBox = document.getElementById('sedadlo-select');
+        selectBox.innerHTML = '<option value="">-- Vyberte sedadlo --</option>';
+
+        const rows = Math.ceil(seatCount / 6);
+        const seatsInRow = ['A', 'B', 'C', 'D', 'E', 'F'];
+        let seatsGenerated = 0;
+
+        for (let r = 1; r <= rows; r++) {
+            for (let s = 0; s < seatsInRow.length; s++) {
+                if (seatsGenerated >= seatCount) break;
+
+                let seatCode = prefix + r + seatsInRow[s];
+                let option = document.createElement('option');
+                option.value = seatCode;
+
+                if (seatCode === currentSeat) {
+                    option.text = "🔵 " + seatCode + " (Vaše aktuální)";
+                    option.selected = true;
+                } else if (occupiedSeats.includes(seatCode)) {
+                    option.text = "❌ " + seatCode + " (Obsazeno)";
+                    option.disabled = true;
+                } else {
+                    option.text = "✅ " + seatCode + " (Volné)";
+                }
+
+                selectBox.add(option);
+                seatsGenerated++;
+            }
+        }
+    });
+</script>
+
+{% endblock %}

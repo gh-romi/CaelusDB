@@ -1,0 +1,243 @@
+{% extends 'main/base.html' %}
+
+{% block title %}Vyhledat let{% endblock %}
+
+{% block content %}
+
+<style>
+    /* --- STYLY PRO KARTU LETU --- */
+    .flight-card {
+        background: white;
+        border: 1px solid #ddd;
+        padding: 20px;
+        margin-bottom: 15px;
+        border-radius: 20px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+
+    /* --- STYLY PRO ŘÁDEK LETU (Segment) --- */
+    .flight-segment {
+        display: flex;           /* Použijeme Flexbox pro rozdělení na sloupce */
+        flex-direction: row;
+        align-items: baseline;   /* Zarovnat text na účaří */
+        gap: 15px;               /* Mezera mezi časem a názvem letiště */
+        margin-bottom: 8px;
+    }
+
+    /* Levý sloupec: Datum a Čas */
+    .segment-left {
+        flex: 0 0 140px;         /* Pevná šířka: Datum+Čas zaberou vždy 140px */
+        display: flex;
+        gap: 8px;
+        white-space: nowrap;     /* Zabraň rozlomení data a času na PC */
+    }
+
+    /* Pravý sloupec: Letiště */
+    .flight-airport {
+        flex: 1;                 /* Zabere zbytek místa */
+        color: #333;
+        font-size: 0.95rem;
+        /* Pokud se text zalomí, zůstane v tomto bloku a nepoleze pod datum */
+    }
+
+    .flight-date { color: #666; font-size: 0.9rem; }
+    .flight-time { font-weight: bold; font-size: 1.1rem; color: #000; }
+
+    /* --- MOBILNÍ ZOBRAZENÍ --- */
+    @media (max-width: 768px) {
+        .flight-card {
+            flex-direction: column;
+            align-items: flex-start;
+            padding-bottom: 20px;
+        }
+
+        /* Úprava levého sloupce na mobilu */
+        .segment-left {
+            flex: 0 0 auto;        /* Na mobilu nefixujeme šířku */
+            flex-direction: column; /* Datum a Čas dáme POD SEBE */
+            gap: 0;
+            margin-right: 10px;
+            width: 80px;           /* Pevná šířka pro zarovnání časů pod sebou */
+        }
+
+        .flight-date { font-size: 0.8rem; } /* Menší datum na mobilu */
+
+        .flight-info-right {
+            width: 100%;
+            text-align: left;
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid #eee;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-left: 0 !important;
+        }
+
+        .flight-info-right a.btn {
+            margin-bottom: 5px;
+        }
+    }
+</style>
+
+<div style="background: white; padding: 30px; border-radius: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+    <h2 style="margin-top: 0;">Kam to bude?</h2>
+
+    <form method="GET" action="." style="display: flex; gap: 20px; flex-wrap: wrap; align-items: flex-end;">
+
+        <div style="flex: 1 1 200px;">
+            <label style="display: block; margin-bottom: 5px; font-weight: bold;">Odkud:</label>
+            <select name="odkud" class="form-control" style="width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 10px; box-sizing: border-box;">
+                <option value="">-- Vyberte město --</option>
+                {% for letiste in letiste_list %}
+                    <option value="{{ letiste.id }}" {% if request.GET.odkud == letiste.id|stringformat:'s' %}selected{% endif %}>
+                        {{ letiste.mesto }}, {{ letiste.zeme }} ({{ letiste.kod_iata }})
+                    </option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div style="flex: 1 1 200px;">
+            <label style="display: block; margin-bottom: 5px; font-weight: bold;">Kam:</label>
+            <select name="kam" class="form-control" style="width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 10px; box-sizing: border-box;">
+                <option value="">-- Vyberte město --</option>
+                {% for letiste in letiste_list %}
+                    <option value="{{ letiste.id }}" {% if request.GET.kam == letiste.id|stringformat:'s' %}selected{% endif %}>
+                        {{ letiste.mesto }}, {{ letiste.zeme }} ({{ letiste.kod_iata }})
+                    </option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div style="flex: 1 1 200px;">
+            <label style="display: block; margin-bottom: 5px; font-weight: bold;">Datum:</label>
+            <input type="date" name="datum"
+                   value="{{ request.GET.datum }}"
+                   min="{% now 'Y-m-d' %}"
+                   style="width: 100%; padding: 9px; border: 1px solid #ccc; border-radius: 10px; box-sizing: border-box; font-family: inherit;">
+        </div>
+
+        <div style="flex: 1 1 150px;">
+            <button type="submit" class="btn btn-primary" style="width: 100%; height: 42px; border-radius: 10px; cursor: pointer;">Vyhledat lety</button>
+        </div>
+    </form>
+</div>
+
+<hr style="margin: 30px 0; border: 0; border-top: 1px solid #ddd;">
+
+{% if cesty %}
+    <h3>Nalezené lety:</h3>
+
+    {% for cesta in cesty %}
+        <div class="flight-card">
+            <div style="flex: 2;">
+
+                {% if cesta.pocet_prestupu == 0 %}
+                    {% with let=cesta.prvni_let %}
+
+                    <div class="flight-segment">
+                        <div class="segment-left">
+                            <span class="flight-date">{{ let.cas_odletu|date:"d.m.Y" }}</span>
+                            <span class="flight-time">{{ let.cas_odletu|date:"H:i" }}</span>
+                        </div>
+                        <div class="flight-airport">
+                            <strong>{{ let.id_letiste_odletu.nazev_letiste }} ({{ let.id_letiste_odletu.kod_iata }})</strong>
+                        </div>
+                    </div>
+
+                    <div class="flight-segment">
+                        <div class="segment-left">
+                            <span class="flight-date">{{ let.cas_priletu|date:"d.m.Y" }}</span>
+                            <span class="flight-time">{{ let.cas_priletu|date:"H:i" }}</span>
+                        </div>
+                        <div class="flight-airport">
+                            <strong>{{ let.id_letiste_priletu.nazev_letiste }} ({{ let.id_letiste_priletu.kod_iata }})</strong>
+                        </div>
+                    </div>
+
+                    <div class="flight-meta" style="margin-top: 10px; border-top: 1px dashed #eee; padding-top: 5px;">
+                        Přímý let • {{ let.id_aerolinky.nazev }} • {{ let.cislo_letu }}
+                    </div>
+                    {% endwith %}
+
+                {% else %}
+                    {% with let1=cesta.segmenty.0 let2=cesta.segmenty.1 %}
+
+                    <div class="flight-segment">
+                        <div class="segment-left">
+                            <span class="flight-date">{{ let1.cas_odletu|date:"d.m.Y" }}</span>
+                            <span class="flight-time">{{ let1.cas_odletu|date:"H:i" }}</span>
+                        </div>
+                        <div class="flight-airport">
+                            <strong>{{ let1.id_letiste_odletu.nazev_letiste }} ({{ let1.id_letiste_odletu.kod_iata }})</strong>
+                        </div>
+                    </div>
+
+                    <div style="margin: 5px 0; padding-left: 20px; border-left: 3px solid #d9534f; color: #666; font-size: 0.9rem; margin-left: 40px;">
+                        <div style="font-weight: bold; color: #d9534f;">
+                            ⚡ Přestup: {{ let1.id_letiste_priletu.mesto }} ({{ let1.id_letiste_priletu.kod_iata }})
+                        </div>
+                        <div>Čekání: {{ let1.cas_priletu|timesince:let2.cas_odletu }}</div>
+                    </div>
+
+                    <div class="flight-segment">
+                        <div class="segment-left">
+                            <span class="flight-date">{{ let2.cas_priletu|date:"d.m.Y" }}</span>
+                            <span class="flight-time">{{ let2.cas_priletu|date:"H:i" }}</span>
+                        </div>
+                        <div class="flight-airport">
+                             <strong>{{ let2.id_letiste_priletu.nazev_letiste }} ({{ let2.id_letiste_priletu.kod_iata }})</strong>
+                        </div>
+                    </div>
+
+                    <div class="flight-meta" style="margin-top: 10px; border-top: 1px dashed #eee; padding-top: 5px;">
+                        1 přestup • {{ let1.id_aerolinky.nazev }} + {{ let2.id_aerolinky.nazev }}
+                    </div>
+                    {% endwith %}
+                {% endif %}
+
+            </div>
+
+            <div class="flight-info-right" style="text-align: right; flex: 1; padding-left: 20px;">
+                <div>
+                    <div style="font-size: 0.9rem; color: #888; font-weight: bold;">Celkem od</div>
+                    <div class="flight-price" style="font-size: 1.4rem; font-weight: bold; color: #28a745;">
+                        {% if not cesta.je_vyprodano %}
+                            {{ cesta.celkova_cena }} $
+                        {% else %}
+                            <span style="color: #999; font-size: 1rem;">Vyprodáno</span>
+                        {% endif %}
+                    </div>
+                </div>
+
+                {% if not cesta.je_vyprodano %}
+                    <a href="{% url 'rezervace_detail' cesta.url_ids %}" class="btn btn-success" style="margin-top: 15px; white-space: nowrap; border-radius: 10px;">
+                        Vybrat let ➔
+                    </a>
+                {% endif %}
+            </div>
+        </div>
+    {% endfor %}
+
+{% elif je_vyhledavani %}
+    <div style="text-align: center; padding: 50px; color: #666;">
+        <div style="font-size: 3rem; margin-bottom: 10px;">✈️❓</div>
+        <h3>Žádné lety nenalezeny</h3>
+        <p>Zkuste změnit datum nebo vybrat jiná letiště.</p>
+    </div>
+
+{% else %}
+    <div style="text-align: center; padding: 60px 20px; color: #444;">
+        <div style="font-size: 4rem; margin-bottom: 20px; opacity: 0.8;">🌍</div>
+        <h1 style="margin-bottom: 10px;">Vítejte v CaelusDB</h1>
+        <p style="font-size: 1.2rem; color: #666;">
+            Vyberte si destinaci a vydejte se na cestu.
+        </p>
+    </div>
+
+{% endif %}
+
+{% endblock %}
