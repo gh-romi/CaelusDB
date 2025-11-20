@@ -9,3 +9,5 @@ python manage.py collectstatic --no-input
 
 # Vytvoří tabulky v databázi
 python manage.py migrate
+
+python create_superuser.py
