@@ -1,0 +1,103 @@
+{% extends 'main/base.html' %}
+
+{% block title %}Detail letu {{ let.cislo_letu }}{% endblock %}
+
+{% block content %}
+
+<div style="max-width: 800px; margin: 0 auto;">
+    
+    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
+        <h1 style="margin: 0; color: #003366">Let {{ let.cislo_letu }}</h1>
+        <a href="{% url 'moje_lety' %}" class="btn" style="background-color: #6c757d; color: white; text-decoration: none;">
+            🠔 Zpět
+        </a>
+    </div>
+
+    <div style="background: white; padding: 25px; border-radius: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 30px;">
+        
+        <div class="route-header" style="font-size: 1.3rem; margin-bottom: 20px;">
+            <div class="route-city">
+                {{ let.id_letiste_odletu.mesto }} ({{ let.id_letiste_odletu.kod_iata }}), {{ let.id_letiste_odletu.zeme }}
+            </div>
+            <div class="route-arrow">➝</div>
+            <div class="route-city">
+                {{ let.id_letiste_priletu.mesto }} ({{ let.id_letiste_priletu.kod_iata }}), {{ let.id_letiste_priletu.zeme }}
+            </div>
+        </div>
+
+        <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;">
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+            <div>
+                <div style="color: #666; font-size: 0.9rem;">Odlet</div>
+                <div style="font-weight: bold; color: #555; font-size: 1.1rem;">{{ let.cas_odletu|date:"d.m.Y H:i" }}</div>
+            </div>
+            <div>
+                <div style="color: #666; font-size: 0.9rem;">Přílet</div>
+                <div style="font-weight: bold; color: #555; font-size: 1.1rem;">{{ let.cas_priletu|date:"d.m.Y H:i" }}</div>
+            </div>
+            <div>
+                <div style="color: #666; font-size: 0.9rem;">Letadlo</div>
+                <div style="font-weight: bold; color: #555;">{{ let.id_letadla.model }}</div>
+            </div>
+            <div>
+                <div style="color: #666; font-size: 0.9rem;">Aerolinka</div>
+                <div style="font-weight: bold; color: #555;">{{ let.id_aerolinky.nazev }}</div>
+            </div>
+        </div>
+
+        <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;">
+
+        <button onclick="openQR('{{ let.id }}', '{{ let.cislo_letu }}', '{{ user.email }}', '{{ user_roles }}')" 
+                class="btn btn-primary" style="width: 100%; border-radius: 10px; padding: 15px; font-size: 1.1rem;">
+            Osobní QR kód (Posádka)
+        </button>
+
+    </div>
+</div>
+
+<div id="qr-modal" class="modal-overlay" onclick="closeQR()">
+    <div class="modal-content" onclick="event.stopPropagation()">
+        <h2 style="margin-top: 0; color: #003366;">Vstup pro posádku</h2>
+        <p style="color: #666;">{{ user.email }}</p>
+        <p style="font-size: 0.8rem; font-weight: bold;">{{ user_roles }}</p>
+        
+        <img id="qr-image" src="" alt="QR Kód" style="width: 200px; height: 200px; margin: 10px 0;">
+        
+        <button onclick="closeQR()" class="btn btn-primary" style="width: 100%; margin-top: 10px; border-radius: 10px;">Zavřít</button>
+    </div>
+</div>
+
+<style>
+    /* Styly (zkopírované) */
+    .route-header { color: #003366; font-weight: bold; display: flex; align-items: center; gap: 15px; flex-wrap: wrap; }
+    .route-arrow { color: #888; font-weight: normal; }
+    
+    .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.7); z-index: 2000; justify-content: center; align-items: center; backdrop-filter: blur(3px); }
+    .modal-content { background: white; padding: 30px; border-radius: 20px; text-align: center; width: 90%; max-width: 350px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); animation: popIn 0.3s ease; }
+    @keyframes popIn { from { transform: scale(0.8); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+
+    @media (max-width: 600px) {
+        .route-header { flex-direction: column; align-items: flex-start; gap: 5px; }
+        .route-arrow { transform: rotate(90deg); margin-left: 5px; display: none; }
+    }
+</style>
+
+<script>
+    function openQR(letId, letCislo, email, role) {
+        const modal = document.getElementById('qr-modal');
+        const qrImage = document.getElementById('qr-image');
+        
+        // Data: ID Letu | Číslo letu | Email | Role
+        const qrData = `CREW|ID:${letId}|FLIGHT:${letCislo}|USER:${email}|ROLES:${role}`;
+        
+        qrImage.src = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qrData)}`;
+        modal.style.display = 'flex';
+    }
+
+    function closeQR() {
+        document.getElementById('qr-modal').style.display = 'none';
+    }
+</script>
+
+{% endblock %}

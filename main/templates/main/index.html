@@ -204,11 +204,11 @@
             <div class="flight-info-right" style="text-align: right; flex: 1; padding-left: 20px;">
                 <div>
                     <div style="font-size: 0.9rem; color: #888; font-weight: bold;">Celkem od</div>
-                    <div class="flight-price" style="font-size: 1.4rem; font-weight: bold; color: #28a745;">
+                    <div class="flight-price" style="font-size: 1.4rem; font-weight: bold; {% if not cesta.je_vyprodano %}color: #28a745;{% else %}color: #dc3545;{% endif %}">
                         {% if not cesta.je_vyprodano %}
                             {{ cesta.celkova_cena }} $
                         {% else %}
-                            <span style="color: #999; font-size: 1rem;">Vyprodáno</span>
+                            VYPRODÁNO
                         {% endif %}
                     </div>
                 </div>
@@ -217,10 +217,39 @@
                     <a href="{% url 'rezervace_detail' cesta.url_ids %}" class="btn btn-success" style="margin-top: 15px; white-space: nowrap; border-radius: 10px;">
                         Vybrat let ➔
                     </a>
+                {% else %}
+                     <button class="btn" style="margin-top: 15px; white-space: nowrap; border-radius: 10px; background: #eee; color: #999; cursor: not-allowed;" disabled>
+                        Nelze rezervovat
+                     </button>
                 {% endif %}
             </div>
         </div>
     {% endfor %}
+
+
+{% if cesty.has_other_pages %}
+    <div style="margin-top: 30px; text-align: center; padding-bottom: 20px;">
+        <div class="pagination">
+
+            {% if cesty.has_previous %}
+                <a href="?page={{ cesty.previous_page_number }}{% if request.GET.odkud %}&odkud={{ request.GET.odkud }}{% endif %}{% if request.GET.kam %}&kam={{ request.GET.kam }}{% endif %}{% if request.GET.datum %}&datum={{ request.GET.datum }}{% endif %}" class="btn" style="background: #eee; color: #333; margin-right: 10px; border-radius: 10px;">
+                    &laquo; Předchozí
+                </a>
+            {% endif %}
+
+            <span style="font-weight: bold; color: #666; margin: 0 10px;">
+                Strana {{ cesty.number }} z {{ cesty.paginator.num_pages }}
+            </span>
+
+            {% if cesty.has_next %}
+                <a href="?page={{ cesty.next_page_number }}{% if request.GET.odkud %}&odkud={{ request.GET.odkud }}{% endif %}{% if request.GET.kam %}&kam={{ request.GET.kam }}{% endif %}{% if request.GET.datum %}&datum={{ request.GET.datum }}{% endif %}" class="btn" style="background: #eee; color: #333; margin-left: 10px; border-radius: 10px;">
+                    Další &raquo;
+                </a>
+            {% endif %}
+
+        </div>
+    </div>
+{% endif %}
 
 {% elif je_vyhledavani %}
     <div style="text-align: center; padding: 50px; color: #666;">

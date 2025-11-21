@@ -57,4 +57,7 @@ urlpatterns = [
     path('letenka/upravit/<int:letenka_id>/', views.upravit_letenku, name='upravit_letenku'),
 
     path('letenka/presadit/<int:letenka_id>/', views.zmenit_sedadlo, name='zmenit_sedadlo'),
+
+    path('moje-lety/', views.moje_lety, name='moje_lety'),
+    path('moje-lety/<int:let_id>/', views.detail_moje_lety, name='detail_moje_lety'),
 ]

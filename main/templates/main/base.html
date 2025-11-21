@@ -219,7 +219,7 @@
             {% if user.is_authenticated %}
                 {% for role in user.role.all %}
                     {% if role.nazev_role == "Pilot" or role.nazev_role == "Palubní průvodčí" %}
-                        <a href="#" class="nav-item">
+                        <a href="{% url 'moje_lety' %}" class="nav-item">
                             <span class="nav-icon">✈️</span>
                             <span class="nav-text">Moje lety</span>
                         </a>

@@ -7,10 +7,12 @@ from django.contrib.auth.decorators import login_required  # Pro @login_required
 from .forms import PublicRegistrationForm, UserProfileForm  # Pro UserProfileForm
 from django.db.models import Min
 from django.shortcuts import render
-from .models import Lety, Letiste, InventarLetu, Role, RoleUzivatel, Letenky, Rezervace
 import json
 from django.utils import timezone
 from datetime import timedelta
+from django.core.paginator import Paginator  # Přidejte import nahoru
+from .models import Lety, Letiste, InventarLetu, Role, RoleUzivatel, Letenky, Rezervace
+from decimal import Decimal  # Přidejte import pro výpočty cen
 
 
 # --- POMOCNÁ FUNKCE PRO MAZÁNÍ ---
@@ -28,39 +30,54 @@ def vycistit_stare_rezervace():
 # Pomocná třída pro zobrazení výsledku (jednotný formát pro přímé i přestupní lety)
 class Cesta:
     def __init__(self, lety_list):
-        self.segmenty = lety_list  # Seznam letů (1 nebo 2)
+        self.segmenty = lety_list
         self.pocet_prestupu = len(lety_list) - 1
         self.celkova_cena = 0
         self.je_vyprodano = False
 
-        # Vypočítat "Cenu od" (součet nejnižších cen segmentů)
+        # Procházíme každý let v cestě (segment)
         for let in self.segmenty:
-            cena = InventarLetu.objects.filter(
-                id_letu=let,
-                pocet_mist_k_prodeji__gt=0
-            ).aggregate(Min('cena'))['cena__min']
+            # Najdeme všechny inventáře (třídy) pro tento let
+            inventare = InventarLetu.objects.filter(id_letu=let)
 
-            if cena is None:
+            nejnizsi_cena_letu = None
+            ma_volne_misto = False
+
+            # Projdeme každou třídu a zjistíme, jestli je v ní místo
+            for inv in inventare:
+                # Kolik je kapacita
+                kapacita = inv.pocet_mist_k_prodeji
+
+                # Kolik už je prodáno letenek pro tento let a tuto třídu
+                prodano = Letenky.objects.filter(id_letu=let, id_tridy=inv.id_tridy).count()
+
+                # Je volno?
+                if prodano < kapacita:
+                    ma_volne_misto = True
+                    # Hledáme nejnižší cenu z dostupných tříd
+                    if nejnizsi_cena_letu is None or inv.cena < nejnizsi_cena_letu:
+                        nejnizsi_cena_letu = inv.cena
+
+            # Pokud jsme pro tento let nenašli žádnou třídu s volným místem
+            if not ma_volne_misto:
                 self.je_vyprodano = True
-                break
-            self.celkova_cena += cena
+                self.celkova_cena = 0  # Nebo jiná hodnota, ale důležité je je_vyprodano
+                break  # Stačí aby byl jeden segment vyprodán a celá cesta je k ničemu
 
-        # Data pro zobrazení v kartě
+            # Pokud místo je, přičteme nejnižší nalezenou cenu k celkové
+            self.celkova_cena += nejnizsi_cena_letu
+
         self.prvni_let = self.segmenty[0]
         self.posledni_let = self.segmenty[-1]
         self.cas_odletu = self.prvni_let.cas_odletu
         self.cas_priletu = self.posledni_let.cas_priletu
-
-        # IDčka pro URL (např "10" nebo "10-25")
         self.url_ids = "-".join([str(l.id) for l in self.segmenty])
 
 
 def verejny_seznam_letu(request):
-
     vycistit_stare_rezervace()
 
     letiste_list = Letiste.objects.all().order_by('mesto')
-
     odkud_id = request.GET.get('odkud')
     kam_id = request.GET.get('kam')
     datum = request.GET.get('datum')
@@ -73,47 +90,48 @@ def verejny_seznam_letu(request):
         prime_lety = Lety.objects.all().order_by('cas_odletu')
         if odkud_id: prime_lety = prime_lety.filter(id_letiste_odletu_id=odkud_id)
         if kam_id: prime_lety = prime_lety.filter(id_letiste_priletu_id=kam_id)
-        if datum: prime_lety = prime_lety.filter(cas_odletu__date__gte=datum)  # Změněno na >=
+        if datum: prime_lety = prime_lety.filter(cas_odletu__date__gte=datum)
 
         for let in prime_lety:
+            # Přímý let přidáme VŽDY, i když je vyprodán (aby se zobrazil červeně)
             vysledne_cesty.append(Cesta([let]))
 
-        # --- 2. LETY S PŘESTUPEM (jen pokud známe start i cíl) ---
+        # --- 2. LETY S PŘESTUPEM ---
         if odkud_id and kam_id:
-            # Najdeme všechny lety z bodu A (start)
             lety_start = Lety.objects.filter(id_letiste_odletu_id=odkud_id)
             if datum: lety_start = lety_start.filter(cas_odletu__date__gte=datum)
 
-            # Najdeme všechny lety do bodu B (cíl)
-            # (Datum zatím neřešíme, musí navazovat na první let)
             lety_cil = Lety.objects.filter(id_letiste_priletu_id=kam_id)
             if datum: lety_cil = lety_cil.filter(cas_odletu__date__gte=datum)
 
-            # Hledáme spojení
-            # (Tohle je zjednodušené řešení. V reálu by se to dělalo efektivněji přes DB dotazy,
-            # ale pro školní projekt je Python cyklus čitelnější)
-
-            min_cas_na_prestup = timedelta(hours=1)  # Min 1 hodina na přestup
-            max_cas_na_prestup = timedelta(hours=24)  # Max 24 hodin čekání
+            min_cas = timedelta(hours=1)
+            max_cas = timedelta(hours=24)
 
             for let1 in lety_start:
                 for let2 in lety_cil:
-                    # Podmínka 1: Místo příletu 1 se musí rovnat místu odletu 2
                     if let1.id_letiste_priletu == let2.id_letiste_odletu:
-
-                        # Podmínka 2: Časová návaznost
                         cas_cekani = let2.cas_odletu - let1.cas_priletu
+                        if min_cas <= cas_cekani <= max_cas:
+                            cesta = Cesta([let1, let2])
 
-                        if min_cas_na_prestup <= cas_cekani <= max_cas_na_prestup:
-                            # Máme shodu! Vytvoříme cestu se 2 segmenty
-                            vysledne_cesty.append(Cesta([let1, let2]))
+                            # ZMĚNA (Vaše V1):
+                            # Pokud je cesta s přestupem vyprodaná, VŮBEC JI NEUKAZUJEME
+                            if not cesta.je_vyprodano:
+                                vysledne_cesty.append(cesta)
 
-    # Seřadíme výsledky podle ceny (nejlevnější nahoře)
-    # (Poznámka: lambda funkce řadí podle vypočtené ceny)
-    vysledne_cesty.sort(key=lambda x: x.celkova_cena if not x.je_vyprodano else 999999)
+    # Řazení: primárně čas, sekundárně cena (vyprodané nakonec)
+    vysledne_cesty.sort(key=lambda x: (
+        x.cas_odletu,
+        x.celkova_cena if not x.je_vyprodano else 999999
+    ))
+
+    # Stránkování
+    paginator = Paginator(vysledne_cesty, 10)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
 
     context = {
-        'cesty': vysledne_cesty,  # Už neposíláme 'lety', ale 'cesty'
+        'cesty': page_obj,
         'letiste_list': letiste_list,
         'je_vyhledavani': je_vyhledavani,
     }
@@ -281,17 +299,18 @@ def moje_rezervace(request):
     datum_do = request.GET.get('datum_do')
     zobrazit_vse = request.GET.get('zobrazit_vse') == 'on'
 
+    # 1. ZÁKLADNÍ BEZPEČNOSTNÍ FILTR (Historie vs Budoucnost)
     if not zobrazit_vse:
-        # Výchozí stav: Jen budoucí rezervace
-        # Řešíme podle data vytvoření rezervace (jednodušší a bez duplicit)
-        # nebo podle data odletu prvního letu (logičtější, ale pozor na duplicity)
-
-        # Tady používám 'letenky__id_letu__cas_odletu', což může způsobit duplicity v SQL JOINu
+        # Pokud není zaškrtnuto "zobrazit vše", VŽDY aplikujeme filtr na budoucnost.
+        # To je naše "tvrdé dno". I když si uživatel do 'datum_od' dá rok 1990,
+        # tento filtr ho nepustí dál než k dnešku.
         rezervace_qs = rezervace_qs.filter(letenky__id_letu__cas_odletu__gte=timezone.now())
 
-    # Aplikace filtrů (pokud jsou zadány)
+    # 2. UŽIVATELSKÉ FILTRY (Aplikují se VŽDY, nad rámec základního filtru)
+    # (Přesunuto ven z else bloku)
     if datum_od:
         rezervace_qs = rezervace_qs.filter(letenky__id_letu__cas_odletu__date__gte=datum_od)
+
     if datum_do:
         rezervace_qs = rezervace_qs.filter(letenky__id_letu__cas_odletu__date__lte=datum_do)
 
@@ -317,19 +336,53 @@ def moje_rezervace(request):
         reverse=False  # Vzestupně (nejbližší čas / nejmenší ID nahoře)
     )
 
+    # --- NOVÉ: STRÁNKOVÁNÍ ---
+    # Zobrazíme 10 rezervací na stránku
+    paginator = Paginator(rezervace_list, 10)
+
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+    # -------------------------
+
     return render(request, 'main/moje_rezervace.html', {
-        'rezervace_list': rezervace_list,
+        'rezervace_list': page_obj,  # Teď posíláme objekt stránky, ne celý seznam
         'zobrazit_vse': zobrazit_vse
     })
 
 
 @login_required
 def detail_moje_rezervace(request, rezervace_id):
-    # Načteme rezervaci a ověříme vlastníka
     rezervace = get_object_or_404(Rezervace, pk=rezervace_id, id_uzivatele=request.user)
 
+    # --- VÝPOČET STORNA ---
+    refund_info = {
+        'amount': 0,
+        'percentage': 0,
+        'is_late_cancellation': False
+    }
+
+    # Najdeme první let (podle času odletu), abychom určili limit
+    prvni_letenka = rezervace.letenky_set.select_related('id_letu').order_by('id_letu__cas_odletu').first()
+
+    if prvni_letenka:
+        cas_odletu = prvni_letenka.id_letu.cas_odletu
+        # Rozdíl mezi teď a odletem
+        time_diff = cas_odletu - timezone.now()
+
+        if time_diff > timedelta(hours=24):
+            # Více než 24h -> Vracíme 100%
+            refund_info['amount'] = rezervace.celkova_cena
+            refund_info['percentage'] = 100
+            refund_info['is_late_cancellation'] = False
+        else:
+            # Méně než 24h -> Vracíme 50% (Pozdní storno)
+            refund_info['amount'] = rezervace.celkova_cena * Decimal('0.5')
+            refund_info['percentage'] = 50
+            refund_info['is_late_cancellation'] = True
+
     return render(request, 'main/detail_moje_rezervace.html', {
-        'rezervace': rezervace
+        'rezervace': rezervace,
+        'refund_info': refund_info  # Posíláme data o vratce do šablony
     })
 
 
@@ -338,11 +391,11 @@ def smazat_rezervaci(request, rezervace_id):
     rezervace = get_object_or_404(Rezervace, pk=rezervace_id, id_uzivatele=request.user)
 
     if request.method == 'POST':
-        # Povolíme smazání jen nezaplacené rezervace
-        if rezervace.status_platby == 'NEZAPLACENO':
-            rezervace.delete()
-            # Přesměrujeme zpět na seznam
-            return redirect('moje_rezervace')
+        # ZMĚNA: Povolíme smazání KDYKOLIV (nejen když je NEZAPLACENO)
+        # V reálném systému bychom zde volali bankovní API pro vrácení peněz ('refund')
+
+        rezervace.delete()
+        return redirect('moje_rezervace')
 
     return redirect('detail_moje_rezervace', rezervace_id=rezervace.id)
 
@@ -428,4 +481,58 @@ def zmenit_sedadlo(request, letenka_id):
         'obsazena_sedadla_json': json.dumps(obsazena_sedadla),
         'kapacita': moje_kapacita,
         'class_index': class_index
+    })
+
+
+@login_required
+def moje_lety(request):
+    # 1. Základní QuerySet: Lety, kde je uživatel v posádce
+    # Používáme related_name='lety' z M:N vazby v modelu Lety
+    lety_qs = request.user.lety.all()
+
+    # 2. Filtrování (stejné jako u rezervací)
+    datum_od = request.GET.get('datum_od')
+    datum_do = request.GET.get('datum_do')
+    zobrazit_vse = request.GET.get('zobrazit_vse') == 'on'
+
+    if not zobrazit_vse:
+        # Výchozí stav: Jen budoucí lety
+        lety_qs = lety_qs.filter(cas_odletu__gte=timezone.now())
+
+    if datum_od:
+        lety_qs = lety_qs.filter(cas_odletu__date__gte=datum_od)
+    if datum_do:
+        lety_qs = lety_qs.filter(cas_odletu__date__lte=datum_do)
+
+    # 3. Řazení (nejbližší nahoře)
+    lety_qs = lety_qs.order_by('cas_odletu')
+
+    # 4. Stránkování
+    paginator = Paginator(lety_qs, 10)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+
+    return render(request, 'main/moje_lety.html', {
+        'lety_list': page_obj,
+        'zobrazit_vse': zobrazit_vse
+    })
+
+
+@login_required
+def detail_moje_lety(request, let_id):
+    # Načteme let, ale jen pokud je uživatel v posádce (bezpečnost)
+    let = get_object_or_404(Lety, pk=let_id, posadka=request.user)
+
+    # Získáme role uživatele pro QR kód (např. "Pilot, Vedoucí kabiny")
+    # Použijeme related_name 'role' z modelu Uzivatele (resp. M:N RoleUzivatel)
+    # Pozor: Model Uzivatele nemá přímý atribut 'role' pro názvy, musíme přes 'roleuzivatel_set' nebo 'role' M2M
+    # V modelu Uzivatele máte: role = models.ManyToManyField(..., related_name="uzivatele")
+
+    # Získáme názvy rolí jako string oddělený čárkou
+    role_list = list(request.user.role.values_list('nazev_role', flat=True))
+    role_str = ", ".join(role_list)
+
+    return render(request, 'main/detail_moje_lety.html', {
+        'let': let,
+        'user_roles': role_str
     })

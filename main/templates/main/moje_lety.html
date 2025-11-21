@@ -1,0 +1,215 @@
+{% extends 'main/base.html' %}
+
+{% block title %}Moje lety{% endblock %}
+
+{% block content %}
+
+<div style="max-width: 800px; margin: 0 auto;">
+
+    <h1 style="margin-bottom: 20px; color: #003366"> ✈️ Moje lety</h1>
+
+    <div style="background: white; padding: 20px; border-radius: 20px; margin-bottom: 30px; box-shadow: 0 2px 5px rgba(0,0,0,0.05);">
+        <form method="GET" action="." style="display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-end;">
+
+            <div style="flex: 1 1 100%; margin-bottom: 10px;">
+                <label style="cursor: pointer; font-weight: bold; display: flex; align-items: center; gap: 10px;">
+                    <input type="checkbox" name="zobrazit_vse" {% if zobrazit_vse %}checked{% endif %}
+                           onchange="toggleDateInputs(this)">
+                    Zobrazit i proběhlé lety (historii)
+                </label>
+            </div>
+
+            <div id="datum-od-wrapper" style="flex: 1 1 150px; {% if not zobrazit_vse %}opacity: 0.5; pointer-events: none;{% endif %}">
+                <label style="display: block; margin-bottom: 5px; font-size: 0.9rem;">Datum od:</label>
+                <input type="date" id="input-datum-od" name="datum_od" value="{{ request.GET.datum_od }}" class="form-control">
+            </div>
+
+            <div style="flex: 1 1 150px;">
+                <label style="display: block; margin-bottom: 5px; font-size: 0.9rem;">Datum do:</label>
+                <input type="date" name="datum_do" value="{{ request.GET.datum_do }}" class="form-control">
+            </div>
+
+            <div style="flex: 1 1 100px;">
+                <button type="submit" class="btn btn-primary" style="width: 100%; height: 38px; border-radius: 10px;">
+                    Filtrovat
+                </button>
+            </div>
+        </form>
+    </div>
+
+    {% if lety_list %}
+        {% for let in lety_list %}
+            <div class="flight-list-card">
+
+                <div class="flight-date-pos" style="color: #555; font-weight: bold; font-size: 1.1rem;">
+                    {{ let.cas_odletu|date:"d.m.Y - H:i" }}
+                </div>
+
+                <div class="flight-info">
+                    <div style="font-size: 1.3rem; font-weight: bold; color: #003366; margin-bottom: 5px;">
+                        Let: {{ let.cislo_letu }}
+                    </div>
+
+                    <div class="route-text" style="color: #555; font-size: 1.2rem">
+                        <span>{{ let.id_letiste_odletu.mesto }} ({{ let.id_letiste_odletu.kod_iata }})</span>
+                        <span class="arrow">➝</span>
+                        <span>{{ let.id_letiste_priletu.mesto }} ({{ let.id_letiste_priletu.kod_iata }})</span>
+                    </div>
+
+                    <div style="color: #555; font-size: 0.9rem; font-weight: bold; margin-top: 5px;">
+                        {{ let.id_letadla.model }}
+                    </div>
+                </div>
+
+                <div class="flight-action">
+                    <a href="{% url 'detail_moje_lety' let.id %}" class="btn btn-primary detail-btn">
+                        Podrobnosti ➔
+                    </a>
+                </div>
+            </div>
+        {% endfor %}
+    {% else %}
+        <p style="text-align: center; color: #666; margin-top: 50px;">
+            Nemáte naplánované žádné lety.
+        </p>
+    {% endif %}
+
+    {% if lety_list.has_other_pages %}
+        <div style="margin-top: 30px; text-align: center;">
+            <div class="pagination">
+                {% if lety_list.has_previous %}
+                    <a href="?page={{ lety_list.previous_page_number }}{% if request.GET.zobrazit_vse %}&zobrazit_vse=on{% endif %}{% if request.GET.datum_od %}&datum_od={{ request.GET.datum_od }}{% endif %}{% if request.GET.datum_do %}&datum_do={{ request.GET.datum_do }}{% endif %}" class="btn" style="background: #eee; color: #333; margin-right: 10px;">&laquo; Předchozí</a>
+                {% endif %}
+                <span style="font-weight: bold; color: #666;">Strana {{ lety_list.number }} z {{ lety_list.paginator.num_pages }}</span>
+                {% if lety_list.has_next %}
+                    <a href="?page={{ lety_list.next_page_number }}{% if request.GET.zobrazit_vse %}&zobrazit_vse=on{% endif %}{% if request.GET.datum_od %}&datum_od={{ request.GET.datum_od }}{% endif %}{% if request.GET.datum_do %}&datum_do={{ request.GET.datum_do }}{% endif %}" class="btn" style="background: #eee; color: #333; margin-left: 10px;">Další &raquo;</a>
+                {% endif %}
+            </div>
+        </div>
+    {% endif %}
+
+</div>
+
+<style>
+    .form-control { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 10px; box-sizing: border-box; }
+
+    /* KARTA LETU */
+    .flight-list-card {
+        position: relative; /* Nutné pro absolutní pozici data */
+        background: white;
+        padding: 20px;
+        border-radius: 20px;
+        margin-bottom: 15px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        border: 1px solid #eee;
+        display: flex;
+        justify-content: space-between; /* Rozhodí Info doleva a Akci doprava */
+        min-height: 80px; /* Aby karta nebyla moc nízká */
+    }
+
+    /* DATUM - Vždy vpravo nahoře */
+    .flight-date-pos {
+        position: absolute;
+        top: 20px;
+        right: 20px;
+        color: #666;
+        font-weight: bold;
+        font-size: 0.9rem;
+    }
+
+    /* INFO (Levá část) */
+    .flight-info {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        padding-right: 20px; /* Aby text nelezl do tlačítka na malém desktopu */
+    }
+
+    .route-text {
+        font-weight: bold;
+        font-size: 1.1rem;
+        color: #333;
+        /* Nové vlastnosti pro flexibilitu */
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    /* --- Nová třída pro šipku --- */
+    .arrow {
+        color: #888;
+        font-weight: normal;
+    }
+
+    /* AKCE (Pravá část - Tlačítko) */
+    .flight-action {
+        display: flex;
+        align-items: flex-end; /* Zarovná tlačítko dolů (bottom right) */
+    }
+
+    .detail-btn {
+        border-radius: 10px;
+        padding: 10px 20px;
+        font-size: 0.9rem;
+        white-space: nowrap;
+    }
+
+    /* --- MOBILNÍ ZOBRAZENÍ --- */
+    @media (max-width: 600px) {
+        .flight-list-card {
+            flex-direction: column; /* Prvky pod sebe */
+
+            /* ZMĚNA: Odstranili jsme 'padding-top: 50px' */
+            /* Nyní text 'Let...' začne nahoře vlevo, naproti datu */
+            padding-top: 20px;
+        }
+
+        .flight-info {
+            padding-right: 0;
+            margin-bottom: 15px;
+
+            /* Přidáme margin-top, aby text nezačínal úplně nalepený na strop,
+               pokud by to kolidovalo, ale obvykle stačí defaultní padding karty.
+               Pro jistotu můžeme přidat pravý margin, aby se text nepřekryl s datem: */
+            margin-right: 110px; /* Uhne datu, které je vpravo */
+        }
+
+        /* Tlačítko na celou šířku */
+        .flight-action {
+            width: 100%;
+        }
+        .detail-btn {
+            width: 100%;
+            text-align: center;
+            display: block;
+            box-sizing: border-box;
+        }
+
+        .route-text {
+            flex-direction: column; /* Prvky pod sebe */
+            align-items: flex-start; /* Zarovnat doleva */
+            gap: 2px; /* Menší mezera */
+        }
+        .route-text .arrow {
+            transform: rotate(90deg); /* Otočit šipku dolů */
+            margin-left: 5px; /* Malé odsazení zleva */
+        }
+
+    }
+</style>
+
+<script>
+    function toggleDateInputs(checkbox) {
+        const inputOd = document.getElementById('input-datum-od');
+        const today = new Date().toISOString().split("T")[0];
+        if (checkbox.checked) { inputOd.removeAttribute('min'); }
+        else { inputOd.min = today; if (inputOd.value && inputOd.value < today) inputOd.value = today; }
+    }
+
+    document.addEventListener("DOMContentLoaded", function() {
+        const checkbox = document.querySelector('input[name="zobrazit_vse"]');
+        if(checkbox) toggleDateInputs(checkbox);
+    });
+</script>
+
+{% endblock %}
