@@ -452,27 +452,18 @@ class RezervaceAdmin(admin.ModelAdmin):
         return False
 
     def has_delete_permission(self, request, obj=None):
-        # ... (zde použijte logiku pro Admina aerolinky z minula) ...
+        # Pokud je to superuser, může vše (dědí ze super())
+        if request.user.is_superuser:
+            return True
+
+        # Admin aerolinky může smazat rezervaci, pokud obsahuje letenku JEHO aerolinky
         if ma_platnou_roli(request.user, "Admin aerolinky"):
             if obj:
+                # Kontrola: Patří alespoň jedna letenka mé aerolince?
                 return obj.letenky_set.filter(id_letu__id_aerolinky=request.user.id_aerolinky).exists()
-            return True
-        return super().has_delete_permission(request, obj)
+            return True  # Obecné právo mazat (pro zobrazení tlačítka v seznamu)
 
-    def has_delete_permission(self, request, obj=None):
-        # 1. Zákazník může smazat SVOU rezervaci
-        if ma_platnou_roli(request.user, "Zákazník"):
-            if obj and obj.id_uzivatele != request.user:
-                return False
-            return True
-
-        # 2. Admin aerolinky může smazat rezervaci TÝKAJÍCÍ SE JEHO AEROLINKY
-        if ma_platnou_roli(request.user, "Admin aerolinky"):
-            if obj:
-                return obj.letenky_set.filter(id_letu__id_aerolinky=request.user.id_aerolinky).exists()
-            return True
-
-        return super().has_delete_permission(request, obj)
+        return False
 
 
 # --- 9. LETENKY (IMPLEMENTOVÁNO PRO ZÁKAZNÍKA) ---
@@ -485,10 +476,6 @@ class LetenkyAdmin(admin.ModelAdmin):
         qs = super().get_queryset(request)
         if request.user.is_superuser: return qs
 
-        # 1. Zákazník vidí letenky spojené s JEHO rezervacemi
-        if ma_platnou_roli(request.user, "Zákazník"):
-            return qs.filter(id_rezervace__id_uzivatele=request.user)
-
         # 2. Admin aerolinky vidí letenky SVOJÍ firmy
         if request.user.id_aerolinky and ma_platnou_roli(request.user, "Admin aerolinky"):
             return qs.filter(id_letu__id_aerolinky=request.user.id_aerolinky)
@@ -498,7 +485,7 @@ class LetenkyAdmin(admin.ModelAdmin):
     # --- Oprávnění ---
     def has_view_permission(self, request, obj=None):
         return super().has_view_permission(request, obj) and ma_platnou_roli(request.user,
-                                                                             ["Admin aerolinky", "Zákazník"])
+                                                                             ["Admin aerolinky"])
 
     # Letenky vytváří/maže Admin aerolinky (nebo systém), zákazník je jen vidí
     def has_add_permission(self, request):
