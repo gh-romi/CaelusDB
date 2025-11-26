@@ -183,6 +183,28 @@ def verejny_seznam_letu(request):
         'letiste_list': letiste_list,
         'je_vyhledavani': je_vyhledavani,
     }
+
+    # Přidat toto před 'return render':
+    nazev_odkud = ""
+    nazev_kam = ""
+
+    if odkud_id:
+        l = Letiste.objects.filter(id=odkud_id).first()
+        if l: nazev_odkud = f"{l.mesto} ({l.kod_iata}), {l.zeme}"
+
+    if kam_id:
+        l = Letiste.objects.filter(id=kam_id).first()
+        if l: nazev_kam = f"{l.mesto} ({l.kod_iata}), {l.zeme}"
+
+    context = {
+        'cesty': page_obj,
+        'letiste_list': letiste_list,
+        'je_vyhledavani': je_vyhledavani,
+        # Přidat nové proměnné:
+        'nazev_odkud': nazev_odkud,
+        'nazev_kam': nazev_kam,
+    }
+
     return render(request, 'main/index.html', context)
 
 

@@ -5,6 +5,38 @@
 {% block content %}
 
 <style>
+
+    /* --- STYLY PRO NAŠEPTVÁČ --- */
+    .suggestions-box {
+        border: 1px solid #ccc;
+        max-height: 200px;
+        overflow-y: auto;
+        position: absolute;
+        background: white;
+        z-index: 1000; /* Aby byl nad ostatním obsahem */
+        width: 100%;
+        border-radius: 0 0 10px 10px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        display: none; /* Defaultně skryté */
+        top: 100%; /* Hned pod inputem */
+    }
+
+    .suggestion-item {
+        padding: 10px;
+        cursor: pointer;
+        border-bottom: 1px solid #eee;
+        font-size: 0.95rem;
+    }
+
+    .suggestion-item:hover {
+        background-color: #f0f8ff;
+        color: #0056b3;
+    }
+
+    .suggestion-item:last-child {
+        border-bottom: none;
+    }
+
     /* --- STYLY PRO KARTU LETU --- */
     .flight-card {
         background: white;
@@ -88,28 +120,30 @@
 
     <form method="GET" action="." style="display: flex; gap: 20px; flex-wrap: wrap; align-items: flex-end;">
 
-        <div style="flex: 1 1 200px;">
+        <div style="flex: 1 1 200px; position: relative;">
             <label style="display: block; margin-bottom: 5px; font-weight: bold;">Odkud:</label>
-            <select name="odkud" class="form-control" style="width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 10px; box-sizing: border-box;">
-                <option value="">-- Vyberte město --</option>
-                {% for letiste in letiste_list %}
-                    <option value="{{ letiste.id }}" {% if request.GET.odkud == letiste.id|stringformat:'s' %}selected{% endif %}>
-                        {{ letiste.mesto }}, {{ letiste.zeme }} ({{ letiste.kod_iata }})
-                    </option>
-                {% endfor %}
-            </select>
+
+            <input type="text" id="search-odkud" class="form-control city-search"
+                   placeholder="Město, letiště nebo kód..." autocomplete="off"
+                   value="{{ nazev_odkud|default:'' }}"
+                   style="width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 10px; box-sizing: border-box;">
+
+            <input type="hidden" name="odkud" id="id-odkud" value="{{ request.GET.odkud }}">
+
+            <div id="suggestions-odkud" class="suggestions-box"></div>
         </div>
 
-        <div style="flex: 1 1 200px;">
+        <div style="flex: 1 1 200px; position: relative;">
             <label style="display: block; margin-bottom: 5px; font-weight: bold;">Kam:</label>
-            <select name="kam" class="form-control" style="width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 10px; box-sizing: border-box;">
-                <option value="">-- Vyberte město --</option>
-                {% for letiste in letiste_list %}
-                    <option value="{{ letiste.id }}" {% if request.GET.kam == letiste.id|stringformat:'s' %}selected{% endif %}>
-                        {{ letiste.mesto }}, {{ letiste.zeme }} ({{ letiste.kod_iata }})
-                    </option>
-                {% endfor %}
-            </select>
+
+            <input type="text" id="search-kam" class="form-control city-search"
+                   placeholder="Město, letiště nebo kód..." autocomplete="off"
+                   value="{{ nazev_kam|default:'' }}"
+                   style="width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 10px; box-sizing: border-box;">
+
+            <input type="hidden" name="kam" id="id-kam" value="{{ request.GET.kam }}">
+
+            <div id="suggestions-kam" class="suggestions-box"></div>
         </div>
 
         <div style="flex: 1 1 200px;">
@@ -268,5 +302,97 @@
     </div>
 
 {% endif %}
+
+
+<script>
+    // Převedeme Django list letišť na JavaScript pole
+    const LETISTE_DATA = [
+        {% for l in letiste_list %}
+        {
+            id: "{{ l.id }}",
+            // PŘIDÁN FILTR |escapejs KE VŠEM POLOŽKÁM
+            nazev: "{{ l.nazev_letiste|escapejs }}",
+            iata: "{{ l.kod_iata|escapejs }}",
+            mesto: "{{ l.mesto|escapejs }}",
+            zeme: "{{ l.zeme|escapejs }}",
+
+            // I zde musíme použít escapejs pro každou proměnnou zvlášť
+            displayValue: "{{ l.mesto|escapejs }} ({{ l.kod_iata|escapejs }}), {{ l.zeme|escapejs }}",
+            listValue: "{{ l.nazev_letiste|escapejs }} ({{ l.kod_iata|escapejs }}), {{ l.mesto|escapejs }}, {{ l.zeme|escapejs }}"
+        },
+        {% endfor %}
+    ];
+</script>
+
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+
+        // Funkce pro inicializaci jednoho našeptávače
+        function setupAutocomplete(inputId, hiddenId, boxId) {
+            const input = document.getElementById(inputId);
+            const hidden = document.getElementById(hiddenId);
+            const box = document.getElementById(boxId);
+
+            // Pokud inputy neexistují, končíme
+            if (!input || !hidden || !box) return;
+
+            // Event: Psaní do inputu
+            input.addEventListener('input', function() {
+                const val = this.value.toLowerCase();
+                box.innerHTML = ''; // Vyčistit staré výsledky
+
+                if (val.length < 2) {
+                    box.style.display = 'none';
+                    return;
+                }
+
+                // Filtrace (hledáme v názvu, městě, IATA kódu nebo zemi)
+                const matches = LETISTE_DATA.filter(l =>
+                    l.nazev.toLowerCase().includes(val) ||
+                    l.mesto.toLowerCase().includes(val) ||
+                    l.iata.toLowerCase().includes(val) ||
+                    l.zeme.toLowerCase().includes(val)
+                );
+
+                if (matches.length > 0) {
+                    box.style.display = 'block';
+                    matches.forEach(l => {
+                        const div = document.createElement('div');
+                        div.className = 'suggestion-item';
+                        div.innerText = l.listValue; // Formát pro seznam
+
+                        // Kliknutí na položku
+                        div.addEventListener('click', function() {
+                            input.value = l.displayValue; // Formát pro input
+                            hidden.value = l.id;          // ID pro server
+                            box.style.display = 'none';
+                        });
+                        box.appendChild(div);
+                    });
+                } else {
+                    box.style.display = 'none';
+                }
+            });
+
+            // Event: Kliknutí mimo zavře našeptávač
+            document.addEventListener('click', function(e) {
+                if (e.target !== input) {
+                    box.style.display = 'none';
+                }
+            });
+
+            // Event: Pokud uživatel smaže text, vymažeme i ID
+            input.addEventListener('change', function() {
+                if (this.value === '') {
+                    hidden.value = '';
+                }
+            });
+        }
+
+        // Spustíme pro oba inputy
+        setupAutocomplete('search-odkud', 'id-odkud', 'suggestions-odkud');
+        setupAutocomplete('search-kam', 'id-kam', 'suggestions-kam');
+    });
+</script>
 
 {% endblock %}
