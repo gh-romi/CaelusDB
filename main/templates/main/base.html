@@ -228,6 +228,26 @@
             {% endif %}
 
             {% if user.is_authenticated %}
+                {% with show_management=False %}
+                    {% if user.is_superuser %}
+                        {% with show_management=True %}{% endwith %} <a href="{% url 'management_novy_let' %}" class="nav-item">
+                            <span class="nav-icon">⚙️</span>
+                            <span class="nav-text">Správa</span>
+                        </a>
+                    {% else %}
+                        {% for role_rel in user.roleuzivatel_set.all %}
+                            {% if role_rel.id_role.nazev_role == "Správce letů" or role_rel.id_role.nazev_role == "Admin aerolinky" %}
+                                <a href="{% url 'management_novy_let' %}" class="nav-item">
+                                    <span class="nav-icon">⚙️</span>
+                                    <span class="nav-text">Správa</span>
+                                </a>
+                                {% endif %}
+                        {% endfor %}
+                    {% endif %}
+                {% endwith %}
+            {% endif %}
+
+            {% if user.is_authenticated %}
                 <a href="{% url 'muj_profil' %}" class="nav-item {% if request.resolver_match.url_name == 'muj_profil' %}active{% endif %}">
                     <span class="nav-icon">👤</span>
                     <span class="nav-text">Profil</span>

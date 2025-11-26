@@ -14,6 +14,9 @@ Including another URLconf
     1. Import the include() function: from django.urls import include, path
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
+
+
+
 from django.contrib import admin
 from django.urls import path
 # 1. Importujeme vestavěné pohledy pro autentizaci
@@ -60,4 +63,13 @@ urlpatterns = [
 
     path('moje-lety/', views.moje_lety, name='moje_lety'),
     path('moje-lety/<int:let_id>/', views.detail_moje_lety, name='detail_moje_lety'),
+
+    # --- SPRÁVA LETŮ (MANAGEMENT) ---
+    path('management/lety/novy/', views.management_novy_let, name='management_novy_let'),
+
+    # --- API ENDPOINTY ---
+    path('api/load-airline-data/', views.api_load_airline_data, name='api_load_airline_data'),
+    path('api/load-flight-detail/', views.api_load_flight_detail, name='api_load_flight_detail'),
+    path('api/check-collisions/', views.api_check_collisions, name='api_check_collisions'),
+    path('api/delete-flight/', views.api_delete_flight, name='api_delete_flight'),  # NOVÉ
 ]

@@ -1,0 +1,151 @@
+{% extends 'main/base.html' %}
+{% block title %}Správa letu{% endblock %}
+{% block content %}
+
+<div class="container" style="max-width: 1000px; margin-top: 20px;">
+    <h1 style="color: #003366; border-bottom: 2px solid #eee; padding-bottom: 10px;">Správa letu</h1>
+
+    {% if error %}
+    <div class="alert alert-danger" style="background: #f8d7da; color: #721c24; padding: 15px; border-radius: 5px; margin-bottom: 20px;">
+        Chyba: {{ error }}
+    </div>
+    {% endif %}
+
+    <form method="POST" action="." id="flightForm">
+        {% csrf_token %}
+        <input type="hidden" name="flight_id" id="flight-id" value="">
+
+        <div class="form-section">
+            <label>Aerolinka:</label>
+            <div style="display: flex; gap: 10px;">
+                <select name="id_aerolinky" id="select-aerolinka" class="form-control" required></select>
+                {% if user.is_superuser %}
+                <button type="button" id="btn-load-airline" class="btn btn-primary" style="white-space: nowrap;">
+                    Načíst data
+                </button>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="form-section" style="position: relative;">
+            <label>Číslo letu (Nový nebo hledat existující):</label>
+            <div style="display: flex; gap: 10px;">
+                <input type="text" name="cislo_letu" id="input-cislo-letu" class="form-control" placeholder="Např. OK-1234" autocomplete="off" required>
+
+                <span id="cislo-letu-status" style="align-self: center; font-weight: bold; white-space: nowrap;"></span>
+
+                <button type="button" id="btn-load-flight" class="btn btn-primary" style="white-space: nowrap;">
+                    Načíst let
+                </button>
+            </div>
+            <div id="let-suggestions" class="suggestions-box"></div>
+        </div>
+
+        <div class="row">
+            <div class="col">
+                <label>Čas odletu:</label>
+                <input type="datetime-local" name="cas_odletu" id="input-odlet" class="form-control" required>
+                <small id="warn-odlet" class="text-danger" style="display: none;">⚠️ Datum je v minulosti!</small>
+            </div>
+            <div class="col">
+                <label>Čas příletu:</label>
+                <input type="datetime-local" name="cas_priletu" id="input-prilet" class="form-control" required>
+                <small id="warn-prilet" class="text-danger" style="display: none;">⚠️ Přílet musí být po odletu!</small>
+                <div id="info-doba-letu" style="color: #0056b3; font-weight: bold; margin-top: 5px;"></div>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col" style="position: relative;">
+                <label>Letiště odletu:</label>
+                <input type="text" id="search-odlet" class="form-control" placeholder="Město, IATA, Země..." autocomplete="off">
+                <input type="hidden" name="id_letiste_odletu" id="id-letiste-odletu" required>
+                <div id="suggestions-odlet" class="suggestions-box"></div>
+            </div>
+            <div class="col" style="position: relative;">
+                <label>Letiště příletu:</label>
+                <input type="text" id="search-prilet" class="form-control" placeholder="Město, IATA, Země..." autocomplete="off">
+                <input type="hidden" name="id_letiste_priletu" id="id-letiste-priletu" required>
+                <div id="suggestions-prilet" class="suggestions-box"></div>
+            </div>
+        </div>
+
+        <div class="form-section">
+            <label>Letadlo:</label>
+            <select name="id_letadla" id="select-letadlo" class="form-control" required>
+                <option value="">-- Nejdříve načtěte aerolinku --</option>
+            </select>
+            <div style="margin-top: 5px;">
+                Kapacita: <strong id="info-kapacita">0</strong> | Zbývá obsadit: <strong id="info-zbyva" style="color: #28a745;">0</strong>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col">
+                <label>Piloti:</label>
+                <div class="dual-list">
+                    <div class="list-box" id="pool-piloti"></div>
+                    <div class="list-controls">➡</div>
+                    <div class="list-box selected" id="selected-piloti"></div>
+                </div>
+                <div id="container-piloti-ids"></div>
+            </div>
+            <div class="col">
+                <label>Průvodčí:</label>
+                <div class="dual-list">
+                    <div class="list-box" id="pool-pruvodci"></div>
+                    <div class="list-controls">➡</div>
+                    <div class="list-box selected" id="selected-pruvodci"></div>
+                </div>
+                <div id="container-pruvodci-ids"></div>
+            </div>
+        </div>
+
+        <hr>
+        <h3>Inventář letu</h3>
+        <div id="inventar-container"></div>
+        <button type="button" id="btn-add-inv" class="btn btn-secondary" style="margin-bottom: 20px;" disabled>+ Přidat inventář</button>
+
+        <div style="margin-top: 30px; padding-top: 20px; border-top: 2px solid #eee; display: flex; gap: 10px; align-items: center;">
+            <button type="button" id="btn-check-collisions" class="btn btn-warning" style="flex: 1; background-color: #d18419; color: white; font-size: 1.1rem; padding: 15px;">
+                Zkontrolovat kolize
+            </button>
+
+            <button type="button" id="btn-delete-flight" class="btn btn-danger" style="display: none; background-color: #dc3545; color: white; font-size: 1.1rem; padding: 15px;">
+                Smazat let
+            </button>
+
+            <button type="submit" class="btn btn-success" style="flex: 2; font-size: 1.2rem; padding: 15px;">
+                Uložit let
+            </button>
+        </div>
+        <div id="collision-results" style="margin-top: 10px;"></div>
+    </form>
+</div>
+
+<script>
+    const DATA = {
+        isSuperuser: {% if user.is_superuser %}true{% else %}false{% endif %},
+        activeAirlineId: {{ active_airline_id|default:"null" }},
+        aerolinky: {{ aerolinky|safe }},
+        letiste: {{ letiste_json|safe }}
+    };
+</script>
+<script src="/static/js/flight_management.js"></script>
+
+<style>
+    .form-control { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 5px; margin-bottom: 5px; box-sizing: border-box; }
+    .form-section { margin-bottom: 20px; }
+    .row { display: flex; gap: 20px; margin-bottom: 20px; }
+    .col { flex: 1; }
+    .dual-list { display: flex; align-items: center; gap: 10px; }
+    .list-box { border: 1px solid #ccc; height: 150px; flex: 1; overflow-y: auto; padding: 5px; background: white; }
+    .list-item { padding: 5px; cursor: pointer; border-bottom: 1px solid #eee; font-size: 0.9rem; }
+    .list-item:hover { background-color: #f0f8ff; }
+    .suggestions-box { border: 1px solid #ccc; max-height: 150px; overflow-y: auto; position: absolute; background: white; z-index: 100; width: 100%; display: none; }
+    .suggestion-item { padding: 8px; cursor: pointer; border-bottom: 1px solid #eee; }
+    .suggestion-item:hover { background-color: #f0f0f0; }
+    .text-danger { color: #dc3545; font-weight: bold; font-size: 0.85rem; }
+    @media (max-width: 768px) { .row { flex-direction: column; gap: 10px; } }
+</style>
+{% endblock %}

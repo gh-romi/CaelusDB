@@ -1,4 +1,19 @@
 
+from django.shortcuts import render, redirect
+from django.core.exceptions import PermissionDenied
+
+import json
+from django.core.serializers.json import DjangoJSONEncoder
+from django.db.models import Q
+
+from django.shortcuts import render, redirect, get_object_or_404
+from django.contrib.auth.decorators import login_required
+from django.core.exceptions import PermissionDenied
+from django.utils import timezone
+from django.contrib.auth import get_user_model
+from django.core.serializers.json import DjangoJSONEncoder
+import json
+
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth import login
 from django.contrib.auth.models import Group
@@ -11,8 +26,41 @@ import json
 from django.utils import timezone
 from datetime import timedelta
 from django.core.paginator import Paginator  # Přidejte import nahoru
-from .models import Lety, Letiste, InventarLetu, Role, RoleUzivatel, Letenky, Rezervace
+from .models import Lety, Letiste, InventarLetu, Role, RoleUzivatel, Letenky, Rezervace, Uzivatele
 from decimal import Decimal  # Přidejte import pro výpočty cen
+
+from django.shortcuts import render, redirect, get_object_or_404
+from django.contrib.auth import get_user_model
+from django.contrib.auth.decorators import login_required
+from django.db.models import Q
+from django.core.exceptions import PermissionDenied
+from django.core.serializers.json import DjangoJSONEncoder
+from django.utils import timezone
+import json
+from django.http import JsonResponse
+
+from django.shortcuts import render, redirect, get_object_or_404
+from django.contrib.auth import login, get_user_model
+from django.contrib.auth.models import Group
+from django.contrib.auth.decorators import login_required
+from django.db.models import Min, Q
+from django.core.exceptions import PermissionDenied
+from django.core.serializers.json import DjangoJSONEncoder
+from django.core.paginator import Paginator
+from django.utils import timezone
+from datetime import timedelta
+import json
+from decimal import Decimal
+from django.http import JsonResponse  # <--- TOTO ČASTO CHYBÍ
+
+# Import modelů
+from .models import (
+    Lety, Letiste, InventarLetu, RoleUzivatel,
+    Aerolinky, Letadla, TridySedadel, Uzivatele
+)
+
+# Získání modelu uživatele (pokud nepoužíváte ten importovaný z models)
+User = get_user_model()
 
 
 # --- POMOCNÁ FUNKCE PRO MAZÁNÍ ---
@@ -536,3 +584,207 @@ def detail_moje_lety(request, let_id):
         'let': let,
         'user_roles': role_str
     })
+
+
+@login_required
+def management_novy_let(request):
+    # 1. Oprávnění
+    if not request.user.is_superuser:
+        role_names = ["Správce letů", "Admin aerolinky"]
+        ma_pravo = RoleUzivatel.objects.filter(
+            id_uzivatele=request.user,
+            id_role__nazev_role__in=role_names,
+            plati_do__gte=timezone.now()
+        ).exists() | RoleUzivatel.objects.filter(
+            id_uzivatele=request.user,
+            id_role__nazev_role__in=role_names,
+            plati_do__isnull=True
+        ).exists()
+        if not ma_pravo:
+            raise PermissionDenied("Nemáte oprávnění pro správu letů.")
+
+    context = {}
+
+    # 2. Aerolinky (Pro dropdown)
+    if request.user.is_superuser:
+        aerolinky = list(Aerolinky.objects.all().values('id', 'nazev'))
+        context['active_airline_id'] = None
+    elif request.user.id_aerolinky:
+        aerolinky = [{'id': request.user.id_aerolinky.id, 'nazev': request.user.id_aerolinky.nazev}]
+        context['active_airline_id'] = request.user.id_aerolinky.id
+    else:
+        aerolinky = []
+        context['active_airline_id'] = None
+
+    context['aerolinky'] = json.dumps(aerolinky, cls=DjangoJSONEncoder)
+
+    # 3. Letiště (Globální - načteme hned, není jich tolik a potřebujeme je pro našeptávač)
+    letiste = list(Letiste.objects.all().values('id', 'nazev_letiste', 'kod_iata', 'mesto', 'zeme'))
+    context['letiste_json'] = json.dumps(letiste, cls=DjangoJSONEncoder)
+
+    # ZPRACOVÁNÍ ULOŽENÍ (POST)
+    if request.method == 'POST':
+        try:
+            flight_id = request.POST.get('flight_id')
+            cislo_letu = request.POST.get('cislo_letu')
+            # Pokud je superuser, bere z formu, jinak ze svého profilu
+            id_aerolinky = request.POST.get('id_aerolinky') or (
+                request.user.id_aerolinky.id if request.user.id_aerolinky else None)
+
+            # Základní data letu
+            defaults = {
+                'cislo_letu': cislo_letu,
+                'cas_odletu': request.POST.get('cas_odletu'),
+                'cas_priletu': request.POST.get('cas_priletu'),
+                'id_letiste_odletu_id': request.POST.get('id_letiste_odletu'),
+                'id_letiste_priletu_id': request.POST.get('id_letiste_priletu'),
+                'id_letadla_id': request.POST.get('id_letadla'),
+                'id_aerolinky_id': id_aerolinky
+            }
+
+            if flight_id:
+                # UPDATE
+                let = get_object_or_404(Lety, pk=flight_id)
+                # Kontrola oprávnění pro update
+                if not request.user.is_superuser and let.id_aerolinky != request.user.id_aerolinky:
+                    raise PermissionDenied
+
+                for key, value in defaults.items():
+                    setattr(let, key, value)
+                let.save()
+                let.inventarletu_set.all().delete()  # Reset inventáře
+            else:
+                # CREATE
+                let = Lety.objects.create(**defaults)
+
+            # Posádka
+            piloti_ids = request.POST.getlist('piloti_ids')
+            pruvodci_ids = request.POST.getlist('pruvodci_ids')
+            let.posadka.set(piloti_ids + pruvodci_ids)
+
+            # Inventář
+            for key in request.POST:
+                if key.startswith('inv_trida_'):
+                    index = key.split('_')[-1]
+                    InventarLetu.objects.create(
+                        id_letu=let,
+                        id_tridy_id=request.POST.get(f'inv_trida_{index}'),
+                        pocet_mist_k_prodeji=request.POST.get(f'inv_pocet_{index}'),
+                        cena=request.POST.get(f'inv_cena_{index}')
+                    )
+
+            # Reload stránky (pokud byl vybrán airline_id, držíme ho v URL pro superadmina)
+            redirect_url = request.path
+            if id_aerolinky and request.user.is_superuser:
+                redirect_url += f"?airline_id={id_aerolinky}"
+            return redirect(redirect_url)
+
+        except Exception as e:
+            context['error'] = str(e)
+
+    return render(request, 'main/management_novy_let.html', context)
+
+
+# --- API FUNKCE ---
+
+@login_required
+def api_load_airline_data(request):
+    airline_id = request.GET.get('airline_id')
+    if not airline_id: return JsonResponse({'error': 'Chybí ID aerolinky'}, status=400)
+
+    if not request.user.is_superuser and str(request.user.id_aerolinky.id) != str(airline_id):
+        return JsonResponse({'error': 'Nemáte oprávnění'}, status=403)
+
+    # 1. Letadla
+    letadla = list(Letadla.objects.filter(id_aerolinky_id=airline_id).values('id', 'model', 'kapacita_sedadel'))
+    # 2. Posádka
+    piloti = list(Uzivatele.objects.filter(id_aerolinky_id=airline_id, role__nazev_role="Pilot").values('id', 'first_name',
+                                                                                                   'last_name',
+                                                                                                   'email'))
+    pruvodci = list(
+        Uzivatele.objects.filter(id_aerolinky_id=airline_id, role__nazev_role="Palubní průvodčí").values('id', 'first_name',
+                                                                                                    'last_name',
+                                                                                                    'email'))
+    # 3. Seznam letů (jen pro našeptávač)
+    existujici_lety = list(Lety.objects.filter(id_aerolinky_id=airline_id).values('id', 'cislo_letu', 'cas_odletu'))
+    # 4. Třídy
+    tridy = list(TridySedadel.objects.filter(Q(id_aerolinky_id=airline_id) | Q(id_aerolinky__isnull=True)).values('id',
+                                                                                                                  'nazev_tridy'))
+
+    return JsonResponse({'letadla': letadla, 'piloti': piloti, 'pruvodci': pruvodci, 'existujici_lety': existujici_lety,
+                         'tridy': tridy})
+
+
+@login_required
+def api_load_flight_detail(request):
+    flight_id = request.GET.get('flight_id')
+    let = get_object_or_404(Lety, pk=flight_id)
+
+    if not request.user.is_superuser and let.id_aerolinky != request.user.id_aerolinky:
+        return JsonResponse({'error': 'Nemáte oprávnění'}, status=403)
+
+    data = {
+        'id': let.id,
+        'cislo_letu': let.cislo_letu,
+        'cas_odletu': let.cas_odletu.isoformat()[:16],
+        'cas_priletu': let.cas_priletu.isoformat()[:16],
+        'id_letiste_odletu': let.id_letiste_odletu_id,
+        'nazev_odletu': f"{let.id_letiste_odletu.mesto} ({let.id_letiste_odletu.kod_iata})",
+        'id_letiste_priletu': let.id_letiste_priletu_id,
+        'nazev_priletu': f"{let.id_letiste_priletu.mesto} ({let.id_letiste_priletu.kod_iata})",
+        'id_letadla': let.id_letadla_id,
+        'posadka_ids': list(let.posadka.values_list('id', flat=True)),
+        'inventar': list(let.inventarletu_set.values('id_tridy', 'pocet_mist_k_prodeji', 'cena'))
+    }
+    return JsonResponse(data)
+
+
+@login_required
+def api_check_collisions(request):
+    if request.method != 'POST': return JsonResponse({'error': 'Only POST'}, status=405)
+    data = json.loads(request.body)
+    flight_id = data.get('flight_id')
+    start = data.get('cas_odletu')
+    end = data.get('cas_priletu')
+    id_letadla = data.get('id_letadla')
+    posadka_ids = data.get('posadka_ids', [])
+    warnings = []
+
+    if not start or not end: return JsonResponse({'warnings': []})
+
+    # Kolize Letadla
+    if id_letadla:
+        kolize = Lety.objects.filter(id_letadla_id=id_letadla, cas_odletu__lt=end, cas_priletu__gt=start)
+        if flight_id: kolize = kolize.exclude(id=flight_id)
+        if kolize.exists(): warnings.append(f"⚠️ Letadlo má jiný let: {kolize.first().cislo_letu}")
+
+    # Kolize Posádky
+    if posadka_ids:
+        kolize_p = Lety.objects.filter(cas_odletu__lt=end, cas_priletu__gt=start, posadka__in=posadka_ids).distinct()
+        if flight_id: kolize_p = kolize_p.exclude(id=flight_id)
+        for k in kolize_p:
+            kolidujici = k.posadka.filter(id__in=posadka_ids)
+            jmena_list = []
+            for u in kolidujici:
+                jmeno = f"{u.first_name} {u.last_name}".strip()
+                if not jmeno:
+                    jmeno = u.email
+                jmena_list.append(jmeno)
+            jmena = ", ".join(jmena_list)
+            warnings.append(f"⚠️ Kolize posádky ({jmena}) s letem {k.cislo_letu}")
+
+    return JsonResponse({'warnings': warnings})
+
+
+@login_required
+def api_delete_flight(request):
+    if request.method != 'POST': return JsonResponse({'error': 'Only POST'}, status=405)
+    data = json.loads(request.body)
+    flight_id = data.get('flight_id')
+    let = get_object_or_404(Lety, pk=flight_id)
+
+    if not request.user.is_superuser and let.id_aerolinky != request.user.id_aerolinky:
+        return JsonResponse({'error': 'Nemáte oprávnění'}, status=403)
+
+    let.delete()
+    return JsonResponse({'success': True})
