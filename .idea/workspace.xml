@@ -6,9 +6,8 @@
   <component name="ChangeListManager">
     <list default="true" id="15005da3-f351-425f-b138-29cd5242e5cd" name="Changes" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/CaelusDB_project/urls.py" beforeDir="false" afterPath="$PROJECT_DIR$/CaelusDB_project/urls.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/main/templates/main/base.html" beforeDir="false" afterPath="$PROJECT_DIR$/main/templates/main/base.html" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/main/views.py" beforeDir="false" afterPath="$PROJECT_DIR$/main/views.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/main/admin.py" beforeDir="false" afterPath="$PROJECT_DIR$/main/admin.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/main/static/js/flight_management.js" beforeDir="false" afterPath="$PROJECT_DIR$/main/static/js/flight_management.js" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />

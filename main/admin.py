@@ -196,6 +196,9 @@ class LetyAdmin(admin.ModelAdmin):
     list_display = ('cislo_letu', 'id_letiste_odletu', 'id_letiste_priletu', 'cas_odletu', 'id_aerolinky')
     list_filter = ('id_aerolinky',)
 
+    search_fields = ('cislo_letu', 'id_letiste_odletu__kod_iata', 'id_letiste_priletu__kod_iata')
+    ordering = ('-id',)  # Řadit od nejnovějšího (nejvyšší ID nahoře)
+
     def get_queryset(self, request):
         qs = super().get_queryset(request)
         if request.user.is_superuser: return qs

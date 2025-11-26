@@ -168,10 +168,15 @@ document.addEventListener("DOMContentLoaded", function() {
                 d.className = 'suggestion-item';
                 d.innerText = `${l.cislo_letu} (${new Date(l.cas_odletu).toLocaleDateString()})`;
                 d.addEventListener('click', () => {
+                    // 1. Vyplníme text
                     els.inpCislo.value = l.cislo_letu;
+
+                    // 2. Skryjeme nabídku
                     els.sugBoxLet.style.display = 'none';
-                    // Spustíme znovu input event pro aktualizaci statusu
-                    els.inpCislo.dispatchEvent(new Event('input'));
+
+                    // 3. AUTOMATICKY KLIKNEME NA TLAČÍTKO "NAČÍST LET"
+                    // To zajistí načtení dat a přepnutí stavu na "Aktuální"
+                    els.btnLoadFlight.click();
                 });
                 els.sugBoxLet.appendChild(d);
             });
@@ -220,6 +225,13 @@ document.addEventListener("DOMContentLoaded", function() {
         // Inventář
         els.contInv.innerHTML = '';
         f.inventar.forEach(i => addInventoryRow(i.id_tridy, i.pocet_mist_k_prodeji, i.cena));
+
+        // Spustíme ručně událost 'input', aby se přepočítal status "Už existuje" -> "Aktuální"
+        els.inpCislo.dispatchEvent(new Event('input'));
+
+        // --- NOVÝ ŘÁDEK: OKAMŽITĚ ZAVŘÍT NAŠEPTVÁČ ---
+        // Protože ten dispatchEvent o řádek výše ho omylem znovu otevřel
+        els.sugBoxLet.style.display = 'none';
     }
 
     // --- 4. SMAZÁNÍ LETU ---
